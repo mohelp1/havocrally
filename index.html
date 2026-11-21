@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Havoc Rally</title>
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; background: #101014; overflow: hidden;
+      touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+    #game { position: fixed; inset: 0; }
+    #rotate { display: none; position: fixed; inset: 0; z-index: 10; background: #101014; color: #ffb52a;
+      font: 900 26px "Arial Black", Arial, sans-serif; align-items: center; justify-content: center; text-align: center; padding: 20px; }
+    @media (orientation: portrait) and (pointer: coarse) { #rotate { display: flex; } }
+  </style>
+  <script src="https://game-cdn.poki.com/scripts/v2/poki-sdk.js"></script>
+</head>
+<body>
+  <div id="game"></div>
+  <div id="rotate">⟳<br>Please rotate your device</div>
+  <script src="lib/phaser.min.js"></script>
+  <script src="src/data.js"></script>
+  <script src="src/poki.js"></script>
+  <script src="src/art.js"></script>
+  <script src="src/race.js"></script>
+  <script src="src/menus.js"></script>
+  <script src="src/main.js"></script>
+</body>
+</html>
