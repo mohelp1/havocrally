@@ -63,7 +63,7 @@ function noiseTile(size, c1, c2, cells, seed, grain, specks) {
 
 // ---------------- themes ----------------
 const THEMES = {
-  desert: { ripples: true, g1: '#c39a5a', g2: '#a47944', run1: '#a07646', run2: '#86613a', road1: '#5f5850', road2: '#504a43',
+  desert: { g1: '#c39a5a', g2: '#a47944', run1: '#a07646', run2: '#86613a', road1: '#5f5850', road2: '#504a43',
     curbA: '#8a3a18', curbB: '#2b2520', line: 'rgba(235,215,170,0.3)', edge: 'rgba(225,205,160,0.35)', wall: 'tires', sand: true, haze: 'sand',
     blots: ['rgba(130,85,45,0.25)', 'rgba(235,205,150,0.22)'], specks: [['rgba(90,60,30,0.35)', 90, 1.2], ['rgba(240,215,165,0.4)', 70, 1]],
     decor: ['burnwreck', 'rock', 'spire', 'wreck', 'bones', 'bush', 'firebarrel', 'skull', 'rock', 'wreckpile', 'cactus', 'spire'] },
@@ -83,7 +83,7 @@ const THEMES = {
     curbA: '#d2581c', curbB: '#14110f', line: 'rgba(255,150,60,0.35)', edge: 'rgba(255,170,90,0.25)', wall: 'blocks', haze: 'ember',
     blots: ['rgba(0,0,0,0.3)', 'rgba(120,70,40,0.18)'], specks: [['rgba(0,0,0,0.4)', 100, 1], ['rgba(150,100,70,0.25)', 60, 0.8]],
     decor: ['burnwreck', 'shack', 'wreckpile', 'firebarrel', 'container', 'shack', 'firebarrel', 'pumpjack'], lamps: true },
-  canyon: { ripples: true, g1: '#b8653a', g2: '#96502c', run1: '#8c4c2a', run2: '#743d22', road1: '#5e4a40', road2: '#4e3d35',
+  canyon: { g1: '#b8653a', g2: '#96502c', run1: '#8c4c2a', run2: '#743d22', road1: '#5e4a40', road2: '#4e3d35',
     curbA: '#2a1a12', curbB: '#c98a4a', line: 'rgba(240,200,150,0.3)', edge: 'rgba(240,200,150,0.3)', wall: 'tires', sand: true, haze: 'sand',
     blots: ['rgba(120,50,20,0.28)', 'rgba(230,150,90,0.22)'], specks: [['rgba(80,30,10,0.35)', 100, 1.2], ['rgba(240,180,120,0.35)', 70, 1]],
     decor: ['spire', 'spire', 'rock', 'bones', 'wreck', 'burnwreck', 'skull', 'spire', 'wreckpile', 'rock'] },
@@ -328,31 +328,6 @@ function trackPath(tr) {
   p.closePath(); return p;
 }
 
-function embossTile(cv, strength) {
-  const W = cv.width, H = cv.height, g = cv.getContext('2d'), img = g.getImageData(0, 0, W, H), d = img.data;
-  const L = new Float32Array(W * H);
-  for (let i = 0; i < W * H; i++) L[i] = d[i * 4] * 0.3 + d[i * 4 + 1] * 0.59 + d[i * 4 + 2] * 0.11;
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-    const a = L[((y + H - 1) % H) * W + (x + W - 1) % W], b = L[((y + 1) % H) * W + (x + 1) % W];
-    const v = (a - b) * strength, i = (y * W + x) * 4;
-    d[i] = clamp(d[i] + v, 0, 255); d[i + 1] = clamp(d[i + 1] + v, 0, 255); d[i + 2] = clamp(d[i + 2] + v, 0, 255);
-  }
-  g.putImageData(img, 0, 0);
-  return cv;
-}
-function rippleTile(cv, seed) {
-  const g = cv.getContext('2d'), S = cv.width, rng = mulberry(seed);
-  g.lineCap = 'round';
-  for (let y0 = 0; y0 < S; y0 += 13) {
-    const ph = rng() * 7, amp = 2 + rng() * 2.5;
-    for (const oy of [-S, 0, S]) for (const [dy, col] of [[0, 'rgba(60,35,15,0.16)'], [1.6, 'rgba(255,235,200,0.16)']]) {
-      g.strokeStyle = col; g.lineWidth = 1.6; g.beginPath();
-      for (let x = 0; x <= S; x += 4) { const y = y0 + oy + dy + Math.sin(x / S * TAU * 2 + ph) * amp; x ? g.lineTo(x, y) : g.moveTo(x, y); }
-      g.stroke();
-    }
-  }
-  return cv;
-}
 function makeTileSet(th, seed) {
   const ground = noiseTile(256, th.g1, th.g2, 4, seed, 10, th.specks);
   if (th.cracks) {               // dried salt crust: crack network
@@ -364,12 +339,10 @@ function makeTileSet(th, seed) {
       g.stroke();
     }
   }
-  if (th.ripples) rippleTile(ground, seed + 3);
-  embossTile(ground, 0.55);
   return {
     ground,
-    run: embossTile(noiseTile(128, th.run1, th.run2, 8, seed + 5, 22, [['rgba(0,0,0,0.25)', 120, 1], ['rgba(255,255,255,0.18)', 80, 0.9]]), 0.7),
-    road: embossTile(noiseTile(128, th.road1, th.road2, 8, seed + 9, 18, [['rgba(255,255,255,0.1)', 180, 0.7], ['rgba(0,0,0,0.22)', 110, 0.9], ['rgba(200,190,170,0.18)', 40, 1.4]]), 0.45)
+    run: noiseTile(128, th.run1, th.run2, 8, seed + 5, 22, [['rgba(0,0,0,0.25)', 120, 1], ['rgba(255,255,255,0.18)', 80, 0.9]]),
+    road: noiseTile(128, th.road1, th.road2, 8, seed + 9, 14, [['rgba(255,255,255,0.08)', 150, 0.7], ['rgba(0,0,0,0.18)', 90, 0.9]])
   };
 }
 
@@ -960,7 +933,7 @@ function carShadowTexture(scene, shape) {
 
 // ---------------- 3D cars: small polygon models pre-rendered at CAR_FRAMES headings ----------------
 const LOW_MEM = (() => { try { return (navigator.deviceMemory && navigator.deviceMemory < 4) || window.matchMedia('(pointer: coarse)').matches; } catch (e) { return false; } })();
-const CAR_FRAMES = 40, CAR_RES3 = LOW_MEM ? 2 : 2.8, CAR_RAD = 32, CAR_HMAX = 22;
+const CAR_FRAMES = 48, CAR_RES3 = LOW_MEM ? 2 : 3.2, CAR_RAD = 32, CAR_HMAX = 22;
 const CAR_FW = Math.ceil(CAR_RAD * 2 * CAR_RES3), CAR_FH = Math.ceil((CAR_RAD * 2 + CAR_HMAX) * CAR_RES3);
 const CAR_OY = (CAR_RAD + CAR_HMAX) / (CAR_RAD * 2 + CAR_HMAX);
 const TAU = Math.PI * 2;
@@ -1371,99 +1344,7 @@ function carModel(shape, color, kitId) {
   return P;
 }
 
-// ---------------- procedural material textures for cars ----------------
-// Each material = a "multiply" tile (grime, pits, tread...) and an optional "screen" tile (scratches, reflections).
-// They are mapped onto every big face with an exact affine transform while the car sheets are rendered.
-const MAT_DENS = 4;                 // texels per world unit
-const CAR_TEX = !LOW_MEM;           // phones skip texturing (faster loading)
-let MAT_TILES = null;
-function makeMaterialTiles() {
-  if (MAT_TILES) return MAT_TILES;
-  const S = 128, mk = () => { const c = makeCanvas(S, S); return [c, c.getContext('2d')]; };
-  const rng = mulberry(9090);
-  const noiseFill = (g, lo, hi, cells, seed) => {
-    const img = g.createImageData(S, S), d = img.data;
-    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
-      let n = 0, a = 0.6, t = 0;
-      for (let o = 0; o < 3; o++) { const p = cells << o, f = p / S; n += vnoiseP(x * f, y * f, p, seed + o * 13) * a; t += a; a *= 0.5; }
-      const v = lo + (hi - lo) * (n / t) + (rng() - 0.5) * 14, i = (y * S + x) * 4;
-      d[i] = d[i + 1] = d[i + 2] = clamp(v, 0, 255); d[i + 3] = 255;
-    }
-    g.putImageData(img, 0, 0);
-  };
-  const scratches = (g, n, col, wmax) => {
-    g.lineCap = 'round';
-    for (let k = 0; k < n; k++) {
-      const x = rng() * S, y = rng() * S, a = rng() * Math.PI, l = 4 + rng() * 22;
-      g.strokeStyle = col; g.lineWidth = 0.5 + rng() * wmax;
-      for (const [ox, oy] of [[0, 0], [S, 0], [-S, 0], [0, S], [0, -S]]) { g.beginPath(); g.moveTo(x + ox, y + oy); g.lineTo(x + ox + Math.cos(a) * l, y + oy + Math.sin(a) * l); g.stroke(); }
-    }
-  };
-  const blotches = (g, n, col, rmin, rmax) => {
-    for (let k = 0; k < n; k++) {
-      const x = rng() * S, y = rng() * S, r = rmin + rng() * (rmax - rmin);
-      for (const [ox, oy] of [[0, 0], [S, 0], [-S, 0], [0, S], [0, -S]]) {
-        const gr = g.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, r); gr.addColorStop(0, col); gr.addColorStop(1, 'rgba(255,255,255,0)');
-        g.fillStyle = gr; g.fillRect(x + ox - r, y + oy - r, r * 2, r * 2);
-      }
-    }
-  };
-  const T = {};
-  // painted sheet metal: light noise, grime patches, chips
-  let [m, g] = mk(); noiseFill(g, 205, 255, 4, 11); blotches(g, 10, 'rgba(150,120,90,0.45)', 8, 26); scratches(g, 30, 'rgba(90,70,50,0.5)', 1);
-  for (let k = 0; k < 40; k++) circ(g, rng() * S, rng() * S, 0.6 + rng() * 1.4, 'rgba(110,80,55,0.7)');
-  let [sc, sg] = mk(); sg.fillStyle = '#000'; sg.fillRect(0, 0, S, S); scratches(sg, 26, 'rgba(255,240,220,0.55)', 0.8);
-  T.paint = { mul: m, mulA: 0.75, scr: sc, scrA: 0.35 };
-  // bare steel plates: brushed streaks, seams and rivets
-  [m, g] = mk(); noiseFill(g, 175, 245, 8, 21);
-  for (let y = 0; y < S; y += 2) { g.fillStyle = `rgba(0,0,0,${rng() * 0.08})`; g.fillRect(0, y, S, 1); }
-  g.strokeStyle = 'rgba(40,30,20,0.85)'; g.lineWidth = 1.4; g.strokeRect(0.7, 0.7, S - 1.4, S - 1.4); g.beginPath(); g.moveTo(S / 2, 0); g.lineTo(S / 2, S); g.stroke();
-  for (const x of [5, S / 2 - 5, S / 2 + 5, S - 5]) for (let y = 6; y < S; y += 20) circ(g, x, y, 1.6, 'rgba(50,40,30,0.8)');
-  blotches(g, 6, 'rgba(140,80,40,0.5)', 6, 18);
-  [sc, sg] = mk(); sg.fillStyle = '#000'; sg.fillRect(0, 0, S, S);
-  for (let y = 0; y < S; y += 3) { sg.fillStyle = `rgba(255,250,240,${rng() * 0.12})`; sg.fillRect(0, y, S, 1); }
-  for (const x of [5, S / 2 - 5, S / 2 + 5, S - 5]) for (let y = 6; y < S; y += 20) circ(sg, x - 0.6, y - 0.6, 0.8, 'rgba(255,240,220,0.8)');
-  T.metal = { mul: m, mulA: 0.85, scr: sc, scrA: 0.5 };
-  // rust: pitted and flaky
-  [m, g] = mk(); noiseFill(g, 120, 255, 6, 31); for (let k = 0; k < 120; k++) circ(g, rng() * S, rng() * S, 0.5 + rng() * 2, 'rgba(40,15,5,0.6)');
-  T.rust = { mul: m, mulA: 0.9 };
-  // tire rubber: tread blocks across the running surface
-  [m, g] = mk(); noiseFill(g, 200, 240, 8, 41);
-  for (let x = 0; x < S; x += 8) { g.fillStyle = 'rgba(0,0,0,0.75)'; g.fillRect(x, 0, 3, S); g.fillStyle = 'rgba(0,0,0,0.4)'; g.fillRect(x + 4, S * 0.3, 2, S * 0.4); }
-  T.tire = { mul: m, mulA: 0.9 };
-  // glass: dark gradient + diagonal sky reflections
-  [m, g] = mk(); const gg = g.createLinearGradient(0, 0, 0, S); gg.addColorStop(0, '#fff'); gg.addColorStop(1, '#9aa0a8'); g.fillStyle = gg; g.fillRect(0, 0, S, S);
-  [sc, sg] = mk(); sg.fillStyle = '#000'; sg.fillRect(0, 0, S, S); sg.save(); sg.translate(S / 2, S / 2); sg.rotate(-0.6);
-  for (const [o, w, a] of [[-40, 18, 0.55], [-12, 6, 0.4], [20, 26, 0.3], [56, 8, 0.45]]) { sg.fillStyle = `rgba(255,245,230,${a})`; sg.fillRect(o, -S, w, S * 2); }
-  sg.restore(); T.glass = { mul: m, mulA: 0.6, scr: sc, scrA: 0.65 };
-  // chrome: strong horizontal bands
-  [m, g] = mk(); noiseFill(g, 215, 255, 8, 51);
-  [sc, sg] = mk(); sg.fillStyle = '#000'; sg.fillRect(0, 0, S, S);
-  for (let y = 0; y < S; y += 16) { const gr = sg.createLinearGradient(0, y, 0, y + 16); gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(0.5, 'rgba(255,255,255,0.7)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); sg.fillStyle = gr; sg.fillRect(0, y, S, 16); }
-  T.chrome = { mul: m, mulA: 0.6, scr: sc, scrA: 0.45 };
-  MAT_TILES = T;
-  return T;
-}
-function makeMatPatterns(g) {
-  const T = makeMaterialTiles(), P = {};
-  for (const k in T) P[k] = { mul: g.createPattern(T[k].mul, 'repeat'), mulA: T[k].mulA, scr: T[k].scr ? g.createPattern(T[k].scr, 'repeat') : null, scrA: T[k].scrA };
-  return P;
-}
-const MAT_BY_COLOR = {
-  '#3a4e60': 'glass', '#9ab0c0': 'glass', '#1c1b1a': 'tire', '#262422': 'tire', '#0e0e0d': 'tire', '#1a1a1a': 'tire',
-  '#b9b6ad': 'chrome', '#cfcabe': 'chrome', '#cfccc2': 'chrome', '#9a978f': 'chrome', '#8a8a80': 'chrome', '#8a8a82': 'chrome', '#c8c2b0': 'chrome',
-  '#7a3e1e': 'rust', '#5a2a12': 'rust', '#8a3a18': 'rust', '#6a3a22': 'rust', '#5a2e1a': 'rust'
-};
-function materialFor(p) {
-  if (p.em) return null;
-  if (p.mat) return p.mat;
-  const c = p.side;
-  if (MAT_BY_COLOR[c]) return MAT_BY_COLOR[c];
-  if (c.startsWith('rgb(')) return 'paint';          // body colors come from shade()
-  return 'metal';
-}
-
-function drawCar3(g, parts, a, ox, oy, pats) {
+function drawCar3(g, parts, a, ox, oy) {
   const ca = Math.cos(a), sa = Math.sin(a), R = CAR_RES3, K = VIEW_K;
   const items = parts.map((p, pi) => {
     if (p.mesh) {
@@ -1510,108 +1391,30 @@ function drawCar3(g, parts, a, ox, oy, pats) {
         if (p.gloss) { const sp = Math.pow(Math.max(0, nx * HALF3[0] + ny * HALF3[1] + nz * HALF3[2]), 16) * (p.side === p.topc ? 55 : 110); col = col.map(v => v + sp); }
       }
       const css = `rgb(${col.map(v => Math.round(clamp(v, 0, 255))).join(',')})`;
-      const sp = f.v.map(proj);
       g.beginPath();
-      sp.forEach(([sx, sy], i) => (i ? g.lineTo(sx, sy) : g.moveTo(sx, sy)));
+      f.v.forEach((v, i) => { const [sx, sy] = proj(v); i ? g.lineTo(sx, sy) : g.moveTo(sx, sy); });
       g.closePath();
       g.fillStyle = css; g.fill();
       g.strokeStyle = css; g.lineWidth = 0.7; g.stroke();
-      if (!pats || p.em) return;
-      let area = 0;
-      for (let i = 0; i < sp.length; i++) { const q = sp[i], w = sp[(i + 1) % sp.length]; area += q[0] * w[1] - w[0] * q[1]; }
-      area = Math.abs(area) / 2;
-      if (area < 26) return;                               // tiny bits: flat color is enough
-      const mat = materialFor(p), M = mat && pats[mat];
-      // texture axes: car-local x/y on top faces, edge direction + up on side faces
-      let U, V;
-      if (f.top) { U = [ca, sa, 0]; V = [-sa, ca, 0]; }
-      else {
-        const e0 = [f.v[1][0] - f.v[0][0], f.v[1][1] - f.v[0][1], f.v[1][2] - f.v[0][2]], le = Math.hypot(...e0) || 1;
-        U = e0.map(x => x / le);
-        V = Math.abs(nz) > 0.85 ? [-U[1], U[0], 0] : [0, 0, 1];
-      }
-      const o = sp[0], pu = [U[0] * R, (U[1] - U[2] * K) * R], pv = [V[0] * R, (V[1] - V[2] * K) * R];
-      g.save();
-      g.clip();
-      g.setTransform(pu[0] / MAT_DENS, pu[1] / MAT_DENS, pv[0] / MAT_DENS, pv[1] / MAT_DENS, o[0], o[1]);
-      if (M) {
-        g.globalCompositeOperation = 'multiply'; g.globalAlpha = M.mulA; g.fillStyle = M.mul; g.fillRect(-2048, -2048, 4096, 4096);
-        if (M.scr) { g.globalCompositeOperation = 'screen'; g.globalAlpha = M.scrA; g.fillStyle = M.scr; g.fillRect(-2048, -2048, 4096, 4096); }
-      }
-      g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1;
-      if (!f.top && !p.mesh && p.cat !== 0 && Math.abs(nz) < 0.85) {   // contact shadow at the bottom of side panels
-        const ao = g.createLinearGradient(0, 0, 0, 3.2 * MAT_DENS); ao.addColorStop(0, 'rgba(10,6,3,0.5)'); ao.addColorStop(1, 'rgba(10,6,3,0)');
-        g.fillStyle = ao; g.fillRect(-2048, 0, 4096, 3.2 * MAT_DENS);
-      }
-      g.restore();
-      if (nz > 0.6 && (mat === 'paint' || mat === 'metal')) {          // light catching the top edges
-        g.strokeStyle = 'rgba(255,240,215,0.3)'; g.lineWidth = 0.9; g.stroke();
-      }
     });
   }
 }
 
 function carSheetKey(shape, color, kit) { return `car3_${shape}_${color.toString(16)}_${kit || 'p'}`; }
-// one frame: draw the textured car into a scratch canvas, then stamp a soft dark outline + the car
-let CAR_TMP = null;
-function composeCarFrame(dst, parts, a, x0, y0, lo) {
-  if (!CAR_TMP) {
-    const t = makeCanvas(CAR_FW, CAR_FH), s2 = makeCanvas(CAR_FW, CAR_FH);
-    CAR_TMP = { t, tg: t.getContext('2d'), s: s2, sg: s2.getContext('2d'), pats: null };
-    CAR_TMP.tg.lineJoin = 'round';
-    if (CAR_TEX) CAR_TMP.pats = makeMatPatterns(CAR_TMP.tg);
+function renderCarSheet(scene, shape, color, kit) {
+  const key = carSheetKey(shape, color, kit);
+  if (scene.textures.exists(key)) return key;
+  const cols = 8, rows = Math.ceil(CAR_FRAMES / cols);
+  const cv = makeCanvas(cols * CAR_FW, rows * CAR_FH), g = cv.getContext('2d');
+  g.lineJoin = 'round';
+  const parts = carModel(shape, color, kit);
+  for (let f = 0; f < CAR_FRAMES; f++) {
+    const ox = (f % cols) * CAR_FW + CAR_FW / 2, oy = Math.floor(f / cols) * CAR_FH + (CAR_RAD + CAR_HMAX) * CAR_RES3;
+    drawCar3(g, parts, f / CAR_FRAMES * TAU, ox, oy);
   }
-  const { t, tg, s: sil, sg } = CAR_TMP;
-  tg.setTransform(1, 0, 0, 1, 0, 0); tg.clearRect(0, 0, CAR_FW, CAR_FH);
-  drawCar3(tg, parts, a, CAR_FW / 2, (CAR_RAD + CAR_HMAX) * CAR_RES3, lo ? null : CAR_TMP.pats);
-  sg.globalCompositeOperation = 'source-over'; sg.clearRect(0, 0, CAR_FW, CAR_FH); sg.drawImage(t, 0, 0);
-  sg.globalCompositeOperation = 'source-in'; sg.fillStyle = '#0c0805'; sg.fillRect(0, 0, CAR_FW, CAR_FH);
-  dst.globalAlpha = 0.6;
-  for (const [dx, dy] of [[-1.3, 0], [1.3, 0], [0, -1.3], [0, 1.3]]) dst.drawImage(sil, x0 + dx, y0 + dy);
-  dst.globalAlpha = 1;
-  dst.drawImage(t, x0, y0);
-}
-// Each car = CAR_FRAMES small textures (one per angle). Every angle is uploaded right after it is drawn,
-// so the GPU rasterizes it in small pieces (no long stall) and background pre-rendering stays smooth.
-const SHEET_JOBS = new Map();
-const angleKey = (base, i) => base + '_f' + i;
-function sheetJob(shape, color, kit, lo) {
-  const key = carSheetKey(shape, color, kit) + (lo ? '_lo' : '');
-  let j = SHEET_JOBS.get(key);
-  if (!j) { j = { key, parts: carModel(shape, color, kit), f: 0, lo }; SHEET_JOBS.set(key, j); }
-  return j;
-}
-function runSheetJob(scene, j, budgetMs) {
-  const t0 = performance.now();
-  while (j.f < CAR_FRAMES && performance.now() - t0 < budgetMs) {
-    const k = angleKey(j.key, j.f);
-    if (!scene.textures.exists(k)) {
-      const cv = makeCanvas(CAR_FW, CAR_FH);
-      composeCarFrame(cv.getContext('2d'), j.parts, j.f / CAR_FRAMES * TAU, 0, 0, j.lo);
-      scene.textures.addCanvas(k, cv);
-    }
-    j.f++;
-  }
-  if (j.f < CAR_FRAMES) return false;
-  SHEET_JOBS.delete(j.key);
-  return true;
-}
-const sheetReady = (scene, key) => scene.textures.exists(angleKey(key, CAR_FRAMES - 1));
-function renderCarSheet(scene, shape, color, kit, lo) {
-  const key = carSheetKey(shape, color, kit) + (lo ? '_lo' : '');
-  if (!sheetReady(scene, key)) runSheetJob(scene, sheetJob(shape, color, kit, lo), Infinity);
+  const tex = scene.textures.addCanvas(key, cv);
+  for (let f = 0; f < CAR_FRAMES; f++) tex.add('f' + f, 0, (f % cols) * CAR_FW, Math.floor(f / cols) * CAR_FH, CAR_FW, CAR_FH);
   return key;
-}
-// pre-render cars in the background (about one angle per frame) while a menu is shown
-function prewarmCarSheets(scene, list) {
-  const todo = list.filter(([sh, c, k]) => !sheetReady(scene, carSheetKey(sh, c, k)));
-  if (!todo.length) return;
-  const ev = scene.time.addEvent({ delay: 16, loop: true, callback: () => {
-    if (!todo.length) { ev.remove(); return; }
-    const [sh, c, k] = todo[0];
-    if (sheetReady(scene, carSheetKey(sh, c, k)) || runSheetJob(scene, sheetJob(sh, c, k), 1)) todo.shift();
-    if (!todo.length) ev.remove();
-  } });
 }
 function carFrame(a) {
   const f = (((a % TAU) + TAU) % TAU) / TAU * CAR_FRAMES, i = Math.round(f);
@@ -1621,23 +1424,20 @@ function carFrame(a) {
 function carFrameTex(scene, shape, color, heading, kit) {
   const fi = carFrame(heading).name.slice(1), key = `car3f_${shape}_${color.toString(16)}_${kit || 'p'}_${fi}`;
   if (scene.textures.exists(key)) return key;
-  const cv = makeCanvas(CAR_FW, CAR_FH), g = cv.getContext('2d');
-  composeCarFrame(g, carModel(shape, color, kit), fi / CAR_FRAMES * TAU, 0, 0);
+  const cv = makeCanvas(CAR_FW, CAR_FH), g = cv.getContext('2d'); g.lineJoin = 'round';
+  drawCar3(g, carModel(shape, color, kit), fi / CAR_FRAMES * TAU, CAR_FW / 2, (CAR_RAD + CAR_HMAX) * CAR_RES3);
   scene.textures.addCanvas(key, cv);
   return key;
 }
 // image of a car for menus (no camera squash there, so compensate Y); spin = needs all angles
 function addCarImage(scene, x, y, shape, color, scale, heading = 0.5, spin = false, kit) {
-  let im;
-  if (spin) { const base = renderCarSheet(scene, shape, color, kit); im = scene.add.image(x, y, base + '_' + carFrame(heading).name); im.sheetBase = base; }
-  else im = scene.add.image(x, y, carFrameTex(scene, shape, color, heading, kit));
+  const im = spin ? scene.add.image(x, y, renderCarSheet(scene, shape, color, kit), carFrame(heading).name) : scene.add.image(x, y, carFrameTex(scene, shape, color, heading, kit));
   const k = scale * 2 / CAR_RES3;              // scale is relative to the old 2x sprites
   return im.setOrigin(0.5, CAR_OY).setScale(k, k * VIEW_IY);
 }
 // free car sheets that are not needed (mobile memory)
 function pruneCarSheets(scene, keep) {
-  scene.textures.getTextureKeys().forEach(k => { if (k.startsWith('car3_') && !keep.includes(k.replace(/_f\d+$/, ''))) scene.textures.remove(k); });
-  for (const k of [...SHEET_JOBS.keys()]) if (!keep.includes(k)) SHEET_JOBS.delete(k);
+  scene.textures.getTextureKeys().forEach(k => { if (k.startsWith('car3_') && !keep.includes(k)) scene.textures.remove(k); });
 }
 
 // ---------------- fx textures ----------------

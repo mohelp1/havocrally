@@ -71,17 +71,6 @@ function statBar(scene, x, y, w, label, f, f2) {
   g.fillStyle(0xffb52a, 1).fillRoundedRect(bx + 1, y - 6, Math.max(3, (bw - 2) * clamp(f, 0, 1)), 12, 4);
   return g;
 }
-// cars that the offered races will need (rivals + the player's car)
-function offerCars(c) {
-  const list = [[CARS[c.car].shape, PLAYER_COLOR, undefined]], seen = new Set();
-  for (const o of c.offers || []) for (const id of o.opp) {
-    if (seen.has(id)) continue; seen.add(id);
-    const def = driverDef(id), dd = c.drivers.find(x => x.id === id);
-    const shape = def.vis !== undefined ? def.vis : Math.min(3, dd ? dd.tier : def.tier);
-    list.push([shape, def.color, id]);
-  }
-  return list;
-}
 const STAT_MAX = (() => { const s = carStats(3, { engine: 3, tires: 3, plating: 3 }, 0); return { speed: s.speed, accel: s.accel, handling: s.turn * s.grip, hp: s.hp }; })();
 const statFracs = s => ({ speed: s.speed / STAT_MAX.speed, accel: s.accel / STAT_MAX.accel, handling: (s.turn * s.grip) / STAT_MAX.handling, hp: s.hp / STAT_MAX.hp });
 
@@ -146,13 +135,11 @@ class GarageScene extends Phaser.Scene {
   constructor() { super('garage'); }
   create() {
     this.starting = false;              // scene instances are reused between visits
-    this.prewarmed = false;
     this.cameras.main.fadeIn(250, 0, 0, 0);
     this.build();
     if (!G.career.tipSeen) this.showTip();
   }
   rebuild() { this.children.removeAll(true); this.build(); }
-  shutdown() { this.prewarmed = false; }
   update(time, delta) { menuTick(this, delta); }
 
   build() {
@@ -167,7 +154,6 @@ class GarageScene extends Phaser.Scene {
     const sb = makeButton(this, GW - 70, 32, 110, 40, Sound.muted ? '🔇 OFF' : '🔊 ON', () => { Sound.toggle(); sb.setLabel(Sound.muted ? '🔇 OFF' : '🔊 ON'); }, { color: 0x4a3f36, size: 16 });
     makeButton(this, GW - 190, 32, 110, 40, 'MENU', () => this.scene.start('title'), { color: 0x4a3f36, size: 16 });
     this.buildCar(c); this.buildShop(c); this.buildRanking(c); this.buildRaces(c);
-    if (!this.prewarmed) { this.prewarmed = true; prewarmCarSheets(this, offerCars(c)); }
     const cg = this.add.graphics();
     drawChain(cg, 430, 66, 430, 560); drawChain(cg, 850, 66, 850, 560);
     rivet(cg, 430, 70, 4); rivet(cg, 850, 70, 4);
@@ -180,7 +166,7 @@ class GarageScene extends Phaser.Scene {
     this.add.image(x + w / 2 + 10, y + 166, 'soft').setTint(0x000000).setAlpha(0.5).setScale(3.4, 1.3).setDepth(0.5);
     const sp = addCarImage(this, x + w / 2, y + 160, st.shape, PLAYER_COLOR, 1.75, 0.5, true).setDepth(1);
     let ang = 0.5;
-    this.time.addEvent({ delay: 50, loop: true, callback: () => { ang += 0.022; sp.setTexture(sp.sheetBase + '_' + carFrame(ang).name); } });
+    this.time.addEvent({ delay: 50, loop: true, callback: () => { ang += 0.022; sp.setFrame(carFrame(ang).name); } });
     const fr = statFracs(st);
     statBar(this, x + 24, y + 236, w - 48, t('speed'), fr.speed);
     statBar(this, x + 24, y + 264, w - 48, t('accel'), fr.accel);
@@ -365,7 +351,6 @@ class ResultsScene extends Phaser.Scene {
       Save.store(c);
     }
     bg(this);
-    prewarmCarSheets(this, offerCars(c));
     const won = pr.place === 1 && !res.dead && !res.forfeit;
     this.add.text(GW / 2, 56, t('results'), { fontFamily: FONT, fontSize: '48px', color: '#ffb52a', stroke: '#000', strokeThickness: 6, resolution: 2 }).setOrigin(0.5);
     this.add.text(GW / 2, 104, `${TRACKS[res.offer.track].name}  ·  ${STR.diff[res.offer.diff]}`, { fontFamily: FONT_B, fontSize: '18px', fontStyle: 'bold', color: '#b0b0bc', resolution: 2 }).setOrigin(0.5);
@@ -431,7 +416,7 @@ class VictoryScene extends Phaser.Scene {
     this.add.text(GW / 2, 310, t('stats', c.races, c.wins, c.kills), { fontFamily: FONT_B, fontSize: '20px', color: '#b0b0bc', resolution: 2 }).setOrigin(0.5);
     const car = addCarImage(this, GW / 2, 460, CARS[c.car].shape, PLAYER_COLOR, 2.2, 0, true);
     let ang = 0;
-    this.time.addEvent({ delay: 40, loop: true, callback: () => { ang += 0.04; car.setTexture(car.sheetBase + '_' + carFrame(ang).name); } });
+    this.time.addEvent({ delay: 40, loop: true, callback: () => { ang += 0.04; car.setFrame(carFrame(ang).name); } });
     makeButton(this, GW / 2 - 170, 600, 300, 64, t('cont'), () => this.scene.start('garage'), { color: 0x5f8a2a });
     makeButton(this, GW / 2 + 170, 600, 300, 64, t('newCareer'), () => { Save.clear(); G.career = newCareer(); this.scene.start('garage'); }, { color: 0x8a2a2a, size: 22 });
     this.time.addEvent({ delay: 60, loop: true, callback: () => {
