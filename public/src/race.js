@@ -4,7 +4,8 @@
 // ============================================================
 
 const CAR_R = 12, CAR_OFF = 10;            // two collision circles per car
-const BULLET_SPEED = 1250, BULLET_LIFE = 0.42, FIRE_GAP = 0.085;
+const CAM_ZOOM = 1.0, GUN_Z = 11;
+const BULLET_SPEED = 1450, BULLET_LIFE = 0.42, FIRE_GAP = 0.085;
 const AMMO_BASE = 140, AMMO_MAX = 220;
 
 // ---------------- particle pool ----------------
@@ -66,16 +67,17 @@ class Car {
     this.fwd = 0; this.lat = 0; this.offroad = false; this.skidT = 0; this.smokeT = 0;
     // AI state
     this.lane = 0; this.laneTarget = 0; this.laneT = 0; this.stuckT = 0; this.revT = 0; this.burstT = 0; this.wrongT = 0;
-    const tex = carTexture(scene, o.stats.shape, o.color);
-    this.sh = scene.add.image(this.x + 4, this.y + 6, carShadowTexture(scene, o.stats.shape)).setScale(1 / CAR_RES).setAlpha(0.42).setDepth(8);
-    this.spr = scene.add.image(this.x, this.y, tex).setScale(1 / CAR_RES).setDepth(10);
+    const tex = renderCarSheet(scene, o.stats.shape, o.color);
+    this.sh = scene.add.image(this.x + 4, this.y + 6, carShadowTexture(scene, o.stats.shape)).setScale(1.08 / CAR_RES).setAlpha(0.45).setDepth(8);
+    this.spr = scene.add.image(this.x, this.y, tex, 'f0').setOrigin(0.5, CAR_OY).setScale(1 / CAR_RES3).setDepth(10);
     if (scene.tr.theme.lamps) this.cone = scene.add.image(this.x, this.y, 'cone').setOrigin(0, 0.5).setScale(1.1, 0.9).setAlpha(0.42).setBlendMode(Phaser.BlendModes.ADD).setDepth(11);
     if (this.isPlayer) this.marker = scene.add.image(this.x, this.y, 'soft').setTint(0xffe14a).setAlpha(0).setDepth(7);
     this.sync();
   }
   sync() {
-    this.spr.setPosition(this.x, this.y).setRotation(this.a);
-    this.sh.setPosition(this.x + 4, this.y + 6).setRotation(this.a);
+    const fr = carFrame(this.a);
+    this.spr.setFrame(fr.name).setPosition(this.x, this.y).setRotation(fr.rest).setDepth(10 + this.y * 1e-4);
+    this.sh.setPosition(this.x + 5, this.y + 5).setRotation(this.a);
     if (this.cone) this.cone.setPosition(this.x + Math.cos(this.a) * 18, this.y + Math.sin(this.a) * 18).setRotation(this.a).setVisible(!this.dead);
   }
   get speed() { return Math.hypot(this.vx, this.vy); }
@@ -96,6 +98,7 @@ class RaceScene extends Phaser.Scene {
     const chunks = renderTrackTextures(this, this.tr);
     chunks.forEach(c => this.add.image(c.x, c.y, c.key).setOrigin(0, 0).setDepth(0));
     this.fx = new FX(this); this.skids = new Skids(this);
+    const dc = cssRGB(this.tr.theme.run1); this.dustCol = (dc[0] << 16) | (dc[1] << 8) | dc[2]; this.fireT = 0;
     this.bulletG = this.add.graphics().setDepth(12).setBlendMode(Phaser.BlendModes.ADD);
     this.bullets = []; this.mines = []; this.pickups = [];
     this.time0 = 0; this.raceT = 0; this.count = this.demo ? 0 : 3.6; this.lastBeep = 4;
@@ -105,8 +108,10 @@ class RaceScene extends Phaser.Scene {
 
     this.makeCars();
     for (let k = 0; k < 7; k++) this.spawnPickup(true);
+    pruneCarSheets(this, this.cars.map(c => c.spr.texture.key).concat(G.career ? [`car3_${CARS[G.career.car].shape}_${PLAYER_COLOR.toString(16)}`] : []));
 
     const cam = this.cameras.main;
+    cam.setZoom(CAM_ZOOM, CAM_ZOOM * VIEW_IY);          // tilted 2.5D view
     cam.setBounds(0, 0, this.tr.W, this.tr.H);
     const f = this.player || this.cars[0];
     this.camX = f.x; this.camY = f.y; cam.centerOn(this.camX, this.camY);
@@ -194,6 +199,7 @@ class RaceScene extends Phaser.Scene {
     this.updateBullets(dt);
     this.updateMines(dt);
     this.updatePickups(dt);
+    this.updateFires(dt);
     this.fx.update(dt); this.skids.update(dt);
     for (const car of this.cars) car.sync();
     this.updateCamera(dt);
@@ -266,7 +272,7 @@ class RaceScene extends Phaser.Scene {
     if (car.smokeT <= 0) {
       car.smokeT = 0.05;
       if (off && spd > 70) {
-        const dust = this.tr.themeName === 'snow' ? 0xffffff : this.tr.themeName === 'forest' ? 0x6b5636 : this.tr.themeName === 'desert' ? 0xc9a56a : 0x888888;
+        const dust = this.dustCol;
         this.fx.spawn('smoke', car.x - ca2 * 18 + rnd(-6, 6), car.y - sa2 * 18 + rnd(-6, 6), { tint: dust, life: 0.9, s0: 0.35, s1: 1.1, a0: 0.55, vx: -car.vx * 0.1 + rnd(-15, 15), vy: -car.vy * 0.1 + rnd(-15, 15), depth: 9 });
       }
       const hpf = car.hp / car.maxHp;
@@ -276,6 +282,18 @@ class RaceScene extends Phaser.Scene {
           this.fx.spawn('soft', car.x + ca2 * 8 + rnd(-5, 5), car.y + sa2 * 8 + rnd(-5, 5), { tint: pick([0xff7a1a, 0xffb02a, 0xff4a10]), add: true, life: 0.35, s0: 0.45, s1: 0.1, a0: 0.9, vy: -40, depth: 21 });
       }
     }
+    if (!car.dead) {
+      // exhaust: dark puffs on throttle, road dust on sandy tracks, backfire when lifting off at speed
+      const ex = car.x - ca2 * 25, ey = car.y - sa2 * 25 - 4 * VIEW_K;
+      if (ctl.thr > 0 && Math.random() < 0.3) this.fx.spawn('smoke', ex, ey, { tint: 0x2a2622, life: 0.7, s0: 0.16, s1: 0.5, a0: 0.42, vx: -ca2 * 40 + rnd(-10, 10), vy: -sa2 * 40 - 14, depth: 9 });
+      if (this.tr.theme.sand && !off && spd > 170 && Math.random() < 0.35)
+        this.fx.spawn('smoke', car.x - ca2 * 20 + rnd(-8, 8), car.y - sa2 * 20 + rnd(-8, 8), { tint: this.dustCol, life: 0.9, s0: 0.3, s1: 1.1, a0: 0.28, vx: -car.vx * 0.12, vy: -car.vy * 0.12, depth: 9 });
+      if (car.prevThr > 0 && ctl.thr <= 0 && vf > 180 && Math.random() < 0.55) {
+        for (let k = 0; k < 4; k++) this.fx.spawn('soft', ex, ey, { tint: pick([0xffd040, 0xff7a1a, 0x5ab0ff]), add: true, life: 0.14, s0: 0.42, s1: 0.1, a0: 1, vx: -ca2 * rnd(90, 200), vy: -sa2 * rnd(90, 200), depth: 12 });
+        this.sfx('backfire', car, 0.8);
+      }
+    }
+    car.prevThr = ctl.thr;
     if (nitro) {
       for (const sd of [-1, 1]) this.fx.spawn('soft', car.x - ca2 * 24 - sa2 * 5 * sd, car.y - sa2 * 24 + ca2 * 5 * sd, { tint: Math.random() < 0.5 ? 0x4ab8ff : 0xffa030, add: true, life: 0.18, s0: 0.38, s1: 0.08, a0: 0.95, vx: -ca2 * 200 + car.vx * 0.6, vy: -sa2 * 200 + car.vy * 0.6, depth: 9 });
     }
@@ -296,7 +314,7 @@ class RaceScene extends Phaser.Scene {
         const ca = Math.cos(car.a), sa = Math.sin(car.a);
         car.spin += clamp((ca * ny - sa * nx) * vn * -0.012, -2.5, 2.5);
         if (vn > 60) {
-          if (!car.invuln) this.damage(car, (vn - 70) * 0.032, null);
+          if (!car.invuln) this.damage(car, (vn - 95) * 0.03, null);
           this.sparks(car.x + nx * 14, car.y + ny * 14, Math.atan2(-ny, -nx), Math.min(10, vn / 30));
           this.sfx('thud', car, Math.min(1, vn / 300));
         }
@@ -355,7 +373,7 @@ class RaceScene extends Phaser.Scene {
         a.spin += clamp(ta * J * 0.00009 / ma, -2, 2); b.spin += clamp(tb * J * 0.00009 / mb, -2, 2);
         const imp = -vn;
         if (imp > 80) {
-          const dmg = (imp - 90) * 0.03;
+          const dmg = (imp - 105) * 0.028;
           if (!a.invuln) this.damage(a, dmg * mb / ma, b);
           if (!b.invuln) this.damage(b, dmg * ma / mb, a);
           this.sparks(cx, cy, Math.atan2(ny, nx) + Math.PI / 2, Math.min(12, imp / 25));
@@ -398,9 +416,9 @@ class RaceScene extends Phaser.Scene {
     let steer = clamp(diff * 2.8, -1, 1);
     // speed for the curvature ahead
     let turn = 0;
-    const reach = 8 + Math.floor(Math.max(0, sp) / 8);
+    const reach = 8 + Math.floor(Math.max(0, sp) / 13);
     for (let k = 6; k <= reach; k += 3) turn = Math.max(turn, Math.abs(angDiff(tr.A[car.idx], tr.A[(car.idx + k) % N])));
-    const caution = 0.62 - car.skill * 0.22;
+    const caution = 0.5 - car.skill * 0.18;
     let tSpeed = st.speed * clamp(1.06 - turn * caution, 0.4, 1);
     if (cruise) tSpeed *= 0.55;
     let thr = sp < tSpeed ? 1 : sp > tSpeed + 45 ? -0.7 : 0.15;
@@ -450,7 +468,7 @@ class RaceScene extends Phaser.Scene {
       const spread = car.isPlayer ? 0.035 : 0.035 + (1 - car.skill) * 0.07;
       const a = car.a + rnd(-spread, spread), gx = car.x + ca * 26, gy = car.y + sa * 26;
       this.bullets.push({ x: gx, y: gy, px: gx, py: gy, vx: Math.cos(a) * BULLET_SPEED + car.vx, vy: Math.sin(a) * BULLET_SPEED + car.vy, life: BULLET_LIFE, owner: car, dmg: car.st.mgDmg });
-      this.fx.spawn('soft', gx, gy, { tint: 0xffd36a, add: true, life: 0.06, s0: 0.45, s1: 0.2, a0: 1, depth: 13 });
+      this.fx.spawn('soft', gx, gy - GUN_Z * VIEW_K, { tint: 0xffd36a, add: true, life: 0.06, s0: 0.45, s1: 0.2, a0: 1, depth: 13 });
       this.sfx('gun', car, car.isPlayer ? 0.8 : 0.6);
     }
     if (ctl.mine && car.mines > 0) {
@@ -493,7 +511,8 @@ class RaceScene extends Phaser.Scene {
       }
       if (b.life <= 0) { B[i] = B[B.length - 1]; B.pop(); continue; }
       g.lineStyle(2.2, 0xffe08a, Math.min(1, b.life * 5));
-      g.lineBetween(b.x - b.vx * 0.022, b.y - b.vy * 0.022, b.x, b.y);
+      const hz = GUN_Z * VIEW_K;
+      g.lineBetween(b.x - b.vx * 0.022, b.y - b.vy * 0.022 - hz, b.x, b.y - hz);
     }
   }
 
@@ -579,6 +598,19 @@ class RaceScene extends Phaser.Scene {
     Sound.play(name, v * clamp(1 - d / 900, 0, 1));
   }
 
+  updateFires(dt) {
+    this.fireT -= dt;
+    if (this.fireT > 0 || !this.tr.fires.length) return;
+    this.fireT = 0.045;
+    const v = this.cameras.main.worldView;
+    for (const f of this.tr.fires) {
+      if (f.x < v.x - 80 || f.x > v.right + 80 || f.y < v.y - 40 || f.y > v.bottom + 140) continue;
+      const fy = f.y - f.z * VIEW_K;
+      this.fx.spawn('soft', f.x + rnd(-3, 3) * f.s, fy, { tint: pick([0xffd040, 0xff8a1a, 0xff5a10]), add: true, life: rnd(0.35, 0.6), s0: 0.34 * f.s, s1: 0.06, a0: 0.9, vx: rnd(-8, 8), vy: -rnd(40, 70), depth: 9.8 });
+      if (Math.random() < 0.18) this.fx.spawn('smoke', f.x, fy - 10, { tint: 0x221d18, life: 1.8, s0: 0.25 * f.s, s1: 1.1 * f.s, a0: 0.3, vx: rnd(5, 18), vy: -rnd(25, 40), depth: 21 });
+    }
+  }
+
   // ---------------- pickups ----------------
   spawnPickup(initial) {
     const tr = this.tr;
@@ -587,21 +619,23 @@ class RaceScene extends Phaser.Scene {
       const x = tr.P[i].x - tr.TY[i] * lat, y = tr.P[i].y + tr.TX[i] * lat;
       if (this.pickups.some(p => Math.hypot(p.x - x, p.y - y) < 300)) continue;
       const r = Math.random(), type = r < 0.38 ? 'cash' : r < 0.62 ? 'ammo' : r < 0.84 ? 'fix' : 'nitro';
-      const spr = this.add.image(x, y, 'pk_' + type).setDepth(4).setScale(initial ? 0.8 : 0.01);
+      const spr = this.add.image(x, y - 14 * VIEW_K, 'pk_' + type).setDepth(9 + y * 1e-4).setScale(initial ? 0.8 : 0.01);
+      const shd = this.add.image(x + 6, y + 4, 'soft').setTint(0x000000).setAlpha(0.35).setScale(0.55).setDepth(3);
       if (!initial) this.tweens.add({ targets: spr, scale: 0.8, duration: 400, ease: 'Back.Out' });
-      this.pickups.push({ x, y, type, spr, t: Math.random() * 6 });
+      this.pickups.push({ x, y, type, spr, shd, t: Math.random() * 6 });
       return;
     }
   }
   updatePickups(dt) {
     for (let i = this.pickups.length - 1; i >= 0; i--) {
       const p = this.pickups[i]; p.t += dt;
-      p.spr.setScale(0.8 + Math.sin(p.t * 4) * 0.06);
+      const sc = 0.8 + Math.sin(p.t * 4) * 0.05;
+      p.spr.setScale(sc, sc / VIEW_IY).setY(p.y - (14 + Math.sin(p.t * 3) * 4) * VIEW_K);
       let taker = null;
       for (const c of this.cars) if (!c.dead && Math.hypot(c.x - p.x, c.y - p.y) < 30) { taker = c; break; }
       if (!taker) continue;
       this.applyPickup(taker, p.type);
-      p.spr.destroy(); this.pickups.splice(i, 1);
+      p.spr.destroy(); p.shd.destroy(); this.pickups.splice(i, 1);
       this.fx.spawn('ring', p.x, p.y, { tint: 0xffffff, add: true, life: 0.35, s0: 0.15, s1: 0.6, a0: 0.9, depth: 20 });
       this.time.delayedCall(rnd(5000, 9000), () => { if (!this.ended && this.sys.isActive()) this.spawnPickup(false); });
     }
@@ -627,7 +661,7 @@ class RaceScene extends Phaser.Scene {
       f = this.camTarget;
     }
     if (!f) return;
-    const tx = f.x + f.vx * 0.32, ty = f.y + f.vy * 0.32;
+    const tx = f.x + f.vx * 0.36, ty = f.y + f.vy * 0.36;
     const k = 1 - Math.exp(-(this.demo ? 2 : 5) * dt);
     this.camX += (tx - this.camX) * k; this.camY += (ty - this.camY) * k;
     this.cameras.main.centerOn(this.camX, this.camY);
@@ -736,6 +770,13 @@ class HudScene extends Phaser.Scene {
     this.countT = txt(GW / 2, GH / 2 - 60, '', 140, '#ffe14a', { strokeThickness: 10 }).setOrigin(0.5).setAlpha(0);
     this.wrongT = txt(GW / 2, 190, t('wrongWay'), 40, '#ff4a3a').setOrigin(0.5).setVisible(false);
     this.hurtR = this.add.rectangle(GW / 2, GH / 2, GW, GH, 0xff0000, 0).setDepth(-1);
+    // ambience: dusty vignette + blowing sand / ash / embers (screen space, under the HUD)
+    const haze = this.race.tr.theme.haze;
+    this.add.image(GW / 2, GH / 2, 'vignette').setDisplaySize(GW, GH).setDepth(-3);
+    this.add.rectangle(GW / 2, GH / 2, GW, GH, haze === 'ash' ? 0x5a4c44 : haze === 'ember' ? 0xff6a20 : 0xd89a58, haze === 'ember' ? 0.05 : 0.07).setDepth(-3);
+    this.amb = { type: haze, g: this.add.graphics().setDepth(-2), p: [] };
+    if (haze === 'ember') this.amb.g.setBlendMode(Phaser.BlendModes.ADD);
+    for (let k = 0; k < (haze === 'sand' ? 46 : 60); k++) this.amb.p.push({ x: rnd(0, GW), y: rnd(0, GH), v: rnd(0.6, 1.4), l: rnd(18, 60), a: rnd(0.08, 0.28), ph: rnd(0, 7) });
     // touch controls
     this.buildTouch();
     // pause overlay
@@ -794,6 +835,27 @@ class HudScene extends Phaser.Scene {
     }
   }
 
+  updateAmbience() {
+    const A = this.amb, g = A.g, dt = Math.min(0.05, this.game.loop.delta / 1000);
+    g.clear();
+    if (this.race.paused) return;
+    for (const q of A.p) {
+      if (A.type === 'sand') {
+        q.x += 520 * q.v * dt; q.y += 90 * q.v * dt;
+        if (q.x > GW + 60 || q.y > GH + 20) { q.x = rnd(-200, GW * 0.6); q.y = rnd(-40, GH); }
+        g.lineStyle(1.6, 0xead2a2, q.a); g.lineBetween(q.x, q.y, q.x - q.l, q.y - q.l * 0.17);
+      } else if (A.type === 'ash') {
+        q.ph += dt * 2; q.x += (20 + Math.sin(q.ph) * 30) * q.v * dt; q.y += 38 * q.v * dt;
+        if (q.y > GH + 10) { q.y = -10; q.x = rnd(0, GW); }
+        g.fillStyle(0xb0a8a0, q.a * 1.6).fillRect(q.x, q.y, 2.4 * q.v, 2.4 * q.v);
+      } else {
+        q.ph += dt * 6; q.x += Math.sin(q.ph * 0.5) * 20 * dt; q.y -= 45 * q.v * dt;
+        if (q.y < -10) { q.y = GH + 10; q.x = rnd(0, GW); }
+        g.fillStyle(0xff8a2a, (0.4 + 0.4 * Math.sin(q.ph)) * q.a * 2.5).fillCircle(q.x, q.y, 1.6 * q.v);
+      }
+    }
+  }
+
   buildPause() { this.pauseC = null; }
   showPause(on) {
     if (this.pauseC) { this.pauseC.destroy(); this.pauseC = null; }
@@ -801,7 +863,7 @@ class HudScene extends Phaser.Scene {
     const c = this.add.container(0, 0).setDepth(100);
     c.add(this.add.rectangle(GW / 2, GH / 2, GW, GH, 0x000000, 0.65).setInteractive());
     c.add(this.txt(GW / 2, 210, t('paused'), 72, '#ffe14a', { strokeThickness: 8 }).setOrigin(0.5));
-    c.add(makeButton(this, GW / 2, 350, 340, 70, t('resume'), () => this.race.togglePause(), { color: 0x1e9e4a }));
+    c.add(makeButton(this, GW / 2, 350, 340, 70, t('resume'), () => this.race.togglePause(), { color: 0x5f8a2a }));
     c.add(makeButton(this, GW / 2, 440, 340, 60, t('forfeit'), () => { this.race.paused = false; this.race.finishRace(true); }, { color: 0x8a2a2a, size: 22 }));
     c.add(makeSoundButton(this, GW / 2, 530));
     this.pauseC = c;
@@ -838,6 +900,7 @@ class HudScene extends Phaser.Scene {
       this.listT[i].setPosition(GW - 226, ty + 1).setText(`${i + 1}. ${c.name}${c.dead ? ' ✖' : c.finished ? ' ⚑' : ''}`).setColor(c.dead ? '#888' : c.isPlayer ? '#ffe14a' : '#fff');
     });
     this.wrongT.setVisible(p.wrongT > 1 && !p.dead && Math.floor(r.raceT * 3) % 2 === 0);
+    this.updateAmbience();
     this.updateTouch();
   }
 }

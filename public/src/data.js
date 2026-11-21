@@ -17,21 +17,21 @@ function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.fl
 
 // ---------------- texty (EN) ----------------
 const STR = {
-    subtitle: 'Combat racing with no rules',
+    subtitle: 'Gasoline. Guns. Glory.',
     play: 'PLAY', cont: 'CONTINUE', newCareer: 'NEW CAREER', sure: 'REALLY DELETE?',
     controls: 'Arrows / WASD – drive   ·   Space – machine gun   ·   X – mine   ·   Shift – nitro   ·   Esc – pause',
     controlsTouch: 'Touch controls: ◀ ▶ to steer, throttle is automatic',
-    garage: 'GARAGE', points: 'Points', raceNo: 'Race #{0}',
+    garage: 'SCRAP GARAGE', points: 'Points', raceNo: 'Race #{0}',
     speed: 'Top speed', accel: 'Acceleration', handling: 'Handling', armor: 'Armor', condition: 'Condition',
     repair: 'REPAIR  {0}', repaired: 'ALL GOOD', repairAd: '▶ FREE REPAIR',
     upgrades: 'UPGRADES', engine: 'Engine', tires: 'Tires', plating: 'Armor plating', mg: 'Machine gun',
-    mines: 'Mines', nitro: 'Nitro', max: 'MAX', dealer: 'CAR DEALER',
+    mines: 'Mines', nitro: 'Nitro', max: 'MAX', dealer: 'JUNKYARD DEALER',
     ranking: 'STANDINGS', you: 'You',
     diff: ['EASY', 'MEDIUM', 'HARD', 'FINAL'],
     prize: 'Prize {0}', race: 'RACE!', opponents: 'Rivals:',
     bossLocked: 'Reach {0} points to challenge the Black Baron for the title!',
     bossCard: 'Title showdown',
-    tip: 'Pick a race below. Win, grab cash – wrecking rivals pays off. Upgrade your car and challenge the Black Baron!',
+    tip: 'The world burned, the roads stayed. Pick a race below, win, grab scrap money – wrecking rivals pays off. Bolt on armor and challenge the Black Baron!',
     loading: 'Loading track…',
     lap: 'LAP', pos: 'POS', go: 'GO!', finish: 'FINISH!', wrecked: 'WRECKED!',
     kill: '{0} wrecked!  +{1}', lastLap: 'FINAL LAP!',
@@ -41,11 +41,11 @@ const STR = {
     prizeMoney: 'Prize money', bounty: 'Wreck bounties', pickups: 'Cash pickups', total: 'Total',
     double: '▶ DOUBLE THE PRIZE', doubled: 'PRIZE DOUBLED!', toGarage: 'TO GARAGE', out: 'wrecked',
     youWrecked: 'Your car was wrecked – no prize.',
-    victory: 'HAVOC RALLY CHAMPION!', victoryTxt: 'You beat the Black Baron. The road is yours now.',
+    victory: 'HAVOC RALLY CHAMPION!', victoryTxt: 'You beat the Black Baron. The wasteland roads are yours now.',
     stats: 'Races: {0}   ·   Wins: {1}   ·   Cars wrecked: {2}',
     owned: 'YOUR CAR', buyFor: 'BUY  {0}', tradeIn: 'Trade-in for your car: {0}', close: 'CLOSE',
     noMoney: 'Not enough cash!', bought: 'Purchased!', rotate: 'Please rotate your device',
-    carDesc: ['Small but tough. Good enough to start.', 'Fast coupe with a sharp nose.', 'Low wedge with a wing. Sticks to the road.', 'Armored monster. Ramming it is a mistake.'],
+    carDesc: ['Rusty little bug with a spiked bumper. Runs on hope.', 'Blown hot-rod coupe. Loud, fast and angry.', 'Low wedge with a wing and a supercharger. Sticks to the sand.', 'Scrap-plated war truck. Ramming it is a mistake.'],
     upDesc: { engine: 'top speed & acceleration', tires: 'grip & steering', plating: 'car durability', mg: 'machine gun damage', mines: 'pack of 3 mines', nitro: 'one nitro charge' }
 };
 function t(k, ...a) {
@@ -59,10 +59,10 @@ const money = n => '$' + Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/
 
 // ---------------- auta ----------------
 const CARS = [
-  { name: 'Beetle', price: 0,     speed: 330, accel: 270, turn: 3.0, grip: 5.6, hp: 100, mass: 1.0,  shape: 0 },
-  { name: 'Cobra',  price: 2400,  speed: 372, accel: 310, turn: 3.15, grip: 6.2, hp: 130, mass: 1.1, shape: 1 },
-  { name: 'Viper',  price: 5800,  speed: 414, accel: 350, turn: 3.3, grip: 6.9, hp: 160, mass: 1.2,  shape: 2 },
-  { name: 'Titan',  price: 11500, speed: 450, accel: 385, turn: 3.35, grip: 7.4, hp: 220, mass: 1.5, shape: 3 }
+  { name: 'Rustbug', price: 0,     speed: 385, accel: 320, turn: 3.15, grip: 6.0, hp: 100, mass: 1.0,  shape: 0 },
+  { name: 'Scorcher',  price: 2400,  speed: 432, accel: 366, turn: 3.3, grip: 6.7, hp: 130, mass: 1.1,  shape: 1 },
+  { name: 'Razorback',  price: 5800,  speed: 480, accel: 413, turn: 3.45, grip: 7.4, hp: 160, mass: 1.2, shape: 2 },
+  { name: 'Juggernaut',  price: 11500, speed: 522, accel: 455, turn: 3.5, grip: 7.9, hp: 220, mass: 1.5,  shape: 3 }
 ];
 const UPGRADES = ['engine', 'tires', 'plating'];
 const UP_BASE = { engine: 320, tires: 260, plating: 280 };
@@ -88,15 +88,15 @@ function carStats(carIdx, up, mgLvl, mult = 1) {
 // ---------------- jezdci ----------------
 const PLAYER_COLOR = 0xd8262e;
 const DRIVERS = [
-  { id: 'bara',   name: 'Babs Bolt',     color: 0x3fa7ff, skill: 0.32, tier: 0, pts: 2 },
+  { id: 'bara',   name: 'Rust Widow',     color: 0x3fa7ff, skill: 0.32, tier: 0, pts: 2 },
   { id: 'kudla',  name: 'Shiv',               color: 0xffd23f, skill: 0.38, tier: 0, pts: 4 },
   { id: 'srot',   name: 'Doc Scrap',    color: 0x8fd14f, skill: 0.44, tier: 0, pts: 6 },
-  { id: 'vyfuk',  name: 'Val Exhaust', color: 0xff8a3d, skill: 0.5,  tier: 1, pts: 9 },
+  { id: 'vyfuk',  name: 'Gasket', color: 0xff8a3d, skill: 0.5,  tier: 1, pts: 9 },
   { id: 'rada',   name: 'Rusty Rudy',   color: 0xb87a3d, skill: 0.56, tier: 1, pts: 12 },
   { id: 'mlynek', name: 'Grinder',           color: 0x9b59ff, skill: 0.63, tier: 1, pts: 16 },
   { id: 'zdena',  name: 'Toothy Tess', color: 0xff4fa3, skill: 0.71, tier: 2, pts: 20 },
   { id: 'jed',    name: 'Jinx',           color: 0x2de0c0, skill: 0.79, tier: 2, pts: 25 },
-  { id: 'hrom',   name: 'Thunder',             color: 0xe8e8e8, skill: 0.87, tier: 3, pts: 31 }
+  { id: 'hrom',   name: 'Sandstorm',             color: 0xe8e8e8, skill: 0.87, tier: 3, pts: 31 }
 ];
 const BOSS = { id: 'baron', name: 'Black Baron', color: 0x262626, skill: 1.0, tier: 3, pts: 50 };
 const BOSS_POINTS = 50;
@@ -112,13 +112,13 @@ const LAPS = [3, 3, 4, 4];
 const TRACKS = [
   { name: 'Dust Gulch', theme: 'desert', grip: 1,
     pts: [[9, 3], [15, 3], [20, 4], [22, 8], [20, 12], [15, 12], [12, 9], [9, 12], [4, 13], [2, 9], [2, 5], [4, 3]] },
-  { name: 'Rusty Docks', theme: 'city', grip: 1,
+  { name: 'Scrapyard', theme: 'scrap', grip: 1,
     pts: [[7, 3], [10, 3], [12, 5], [14, 3], [21, 3], [23, 5], [23, 12], [21, 14], [14, 14], [14, 9], [9, 9], [9, 14], [4, 14], [2, 12], [2, 5], [4, 3]] },
-  { name: 'Frost Pass', theme: 'snow', grip: 0.62, long: true,
+  { name: 'Salt Flats', theme: 'salt', grip: 0.7, long: true,
     pts: [[13, 20], [8, 20], [3, 17], [5, 13], [2, 9], [3, 4], [8, 2], [13, 4], [18, 2], [23, 4], [24, 9], [20, 11], [16, 9], [12, 12], [16, 15], [22, 15], [23, 18], [18, 20]] },
-  { name: 'Burnt Woods', theme: 'forest', grip: 0.95, long: true,
+  { name: 'Ashlands', theme: 'ash', grip: 0.95, long: true,
     pts: [[12, 3], [22, 3], [24, 6], [21, 9], [12, 9], [10, 11], [12, 13], [22, 13], [24, 16], [21, 19], [4, 19], [2, 16], [2, 6], [4, 3]] },
-  { name: "Baron's Arena", theme: 'night', grip: 1, long: true,
+  { name: "Baron's Fire Pit", theme: 'night', grip: 1, long: true,
     pts: [[7, 3], [11, 3], [14, 7], [18, 3], [24, 3], [26, 6], [26, 16], [23, 19], [17, 19], [15, 15], [11, 15], [9, 19], [4, 19], [2, 16], [4, 12], [2, 8], [3, 4]] }
 ];
 

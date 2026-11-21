@@ -118,6 +118,7 @@ const Sound = {
       case 'deny': this.tone(220, 140, 0.18, 'square', 0.18 * v); break;
       case 'lap': [660, 990].forEach((f, i) => this.tone(f, f, 0.12, 'triangle', 0.25 * v, i * 0.1)); break;
       case 'win': [523, 659, 784, 1047].forEach((f, i) => this.tone(f, f, 0.22, 'square', 0.16 * v, i * 0.13)); break;
+      case 'backfire': this.noise(0.09, 700, 'lowpass', 0.7 * v); this.tone(160, 50, 0.08, 'square', 0.25 * v); break;
       case 'skid': this.noise(0.12, 1600, 'bandpass', 0.07 * v, 3); break;
     }
   },
@@ -131,18 +132,21 @@ const Sound = {
     const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 600; f.Q.value = 2;
     const g = c.createGain(); g.gain.value = 0;
     const g2 = c.createGain(); g2.gain.value = 0.35;
-    o1.connect(f); o2.connect(g2).connect(f); f.connect(g).connect(this.master);
+    const sh = c.createWaveShaper(), curve = new Float32Array(512);       // gritty, rumbling V8-ish tone
+    for (let i = 0; i < 512; i++) { const xx = i / 255.5 - 1; curve[i] = Math.tanh(xx * 3.2); }
+    sh.curve = curve;
+    o1.connect(f); o2.connect(g2).connect(f); f.connect(sh).connect(g).connect(this.master);
     o1.start(); o2.start();
     this.eng = { o1, o2, f, g };
   },
   engineSet(ratio, load) {
     if (!this.eng) return;
     const t0 = this.ctx.currentTime, r = clamp(ratio, 0, 1.4);
-    const base = 42 + r * 120 + load * 12;
+    const base = 34 + r * 108 + load * 10;
     this.eng.o1.frequency.setTargetAtTime(base, t0, 0.05);
     this.eng.o2.frequency.setTargetAtTime(base * 0.5, t0, 0.05);
     this.eng.f.frequency.setTargetAtTime(380 + r * 900 + load * 300, t0, 0.08);
-    this.eng.g.gain.setTargetAtTime(0.07 + r * 0.06 + load * 0.03, t0, 0.08);
+    this.eng.g.gain.setTargetAtTime(0.05 + r * 0.045 + load * 0.025, t0, 0.08);
   },
   engineStop() {
     if (!this.eng) return;

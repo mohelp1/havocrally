@@ -38,25 +38,31 @@ function makeButton(scene, x, y, w, h, label, cb, o = {}) {
 }
 function makeSoundButton(scene, x, y) {
   const lab = () => (Sound.muted ? 'SOUND: OFF' : 'SOUND: ON');
-  const b = makeButton(scene, x, y, 220, 46, lab(), () => { Sound.toggle(); b.setLabel(lab()); }, { color: 0x34495e, size: 18 });
+  const b = makeButton(scene, x, y, 220, 46, lab(), () => { Sound.toggle(); b.setLabel(lab()); }, { color: 0x4a3f36, size: 18 });
   return b;
 }
 function panel(scene, x, y, w, h, title) {
   const g = scene.add.graphics();
   g.fillStyle(0x000000, 0.35).fillRoundedRect(x + 4, y + 6, w, h, 14);
-  g.fillStyle(0x1b1d24, 0.94).fillRoundedRect(x, y, w, h, 14);
-  g.lineStyle(2, 0x3a3d48, 1).strokeRoundedRect(x, y, w, h, 14);
+  g.fillStyle(0x211a15, 0.95).fillRoundedRect(x, y, w, h, 10);
+  g.lineStyle(3, 0x5a3c26, 1).strokeRoundedRect(x, y, w, h, 10);
+  g.lineStyle(1, 0x000000, 0.6).strokeRoundedRect(x + 4, y + 4, w - 8, h - 8, 7);
+  for (const [rx, ry] of [[x + 10, y + h - 10], [x + w - 10, y + h - 10]]) { g.fillStyle(0x8a6a4a, 1).fillCircle(rx, ry, 3); g.fillStyle(0x2a1d14, 1).fillCircle(rx + 0.8, ry + 0.8, 1.2); }
   if (title) {
-    g.fillStyle(0x2a2d38, 1).fillRoundedRect(x, y, w, 40, { tl: 14, tr: 14, bl: 0, br: 0 });
-    scene.add.text(x + 16, y + 20, title, { fontFamily: FONT, fontSize: '19px', color: '#ffb52a', resolution: 2 }).setOrigin(0, 0.5);
+    g.fillStyle(0x3d2a1c, 1).fillRoundedRect(x, y, w, 40, { tl: 10, tr: 10, bl: 0, br: 0 });
+    g.fillStyle(0x7a4a26, 0.35); for (let k = 0; k < 4; k++) g.fillRect(x + w * 0.5 + k * (w / 9), y + 8, w / 18, 24);
+    for (const rx of [x + 10, x + w - 10]) { g.fillStyle(0x8a6a4a, 1).fillCircle(rx, y + 20, 3); g.fillStyle(0x2a1d14, 1).fillCircle(rx + 0.8, y + 20.8, 1.2); }
+    scene.add.text(x + 22, y + 20, title, { fontFamily: FONT, fontSize: '19px', color: '#ffb52a', resolution: 2 }).setOrigin(0, 0.5);
   }
   return g;
 }
 function bg(scene) {
   const g = scene.add.graphics();
-  g.fillGradientStyle(0x16171d, 0x16171d, 0x2a1d17, 0x2a1d17, 1).fillRect(0, 0, GW, GH);
-  g.lineStyle(26, 0xffffff, 0.018);
-  for (let x = -GH; x < GW; x += 70) g.lineBetween(x, GH, x + GH, 0);
+  g.fillGradientStyle(0x1c1510, 0x1c1510, 0x3a2414, 0x3a2414, 1).fillRect(0, 0, GW, GH);
+  g.lineStyle(30, 0xd89a3a, 0.025);
+  for (let x = -GH; x < GW; x += 90) g.lineBetween(x, GH, x + GH, 0);
+  const rng = mulberry(5);
+  for (let k = 0; k < 140; k++) { g.fillStyle(rng() < 0.5 ? 0x7a3e1e : 0x000000, 0.05 + rng() * 0.08).fillCircle(rng() * GW, rng() * GH, 6 + rng() * 40); }
   return g;
 }
 function toast(scene, text, color = '#ff5a4a') {
@@ -96,6 +102,8 @@ class TitleScene extends Phaser.Scene {
     const g = this.add.graphics();
     g.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0.82, 0.15, 0.82, 0.15).fillRect(0, 0, GW, GH);
     g.fillStyle(0x000000, 0.35).fillRect(0, GH - 58, GW, 58);
+    this.add.image(GW / 2, GH / 2, 'vignette').setDisplaySize(GW, GH).setDepth(-1);
+    this.add.rectangle(GW / 2, GH / 2, GW, GH, 0xd89a58, 0.07).setDepth(-1);
     const logo1 = this.add.text(80, 120, 'HAVOC', { fontFamily: FONT, fontSize: '124px', color: '#ffb52a', stroke: '#2a0a00', strokeThickness: 12, resolution: 2 }).setOrigin(0, 0.5).setShadow(6, 8, '#000', 6, true, true);
     const logo2 = this.add.text(92, 225, 'RALLY', { fontFamily: FONT, fontSize: '92px', color: '#ffffff', stroke: '#8a1010', strokeThickness: 10, resolution: 2 }).setOrigin(0, 0.5).setShadow(6, 8, '#000', 6, true, true);
     this.add.text(96, 296, t('subtitle').toUpperCase(), { fontFamily: FONT, fontSize: '22px', color: '#ff6a4a', resolution: 2 }).setOrigin(0, 0.5);
@@ -103,7 +111,7 @@ class TitleScene extends Phaser.Scene {
     logo2.setAngle(-2);
     const has = !!G.career;
     const go = () => { Sound.init(); this.scene.stop('race'); this.scene.start('garage'); };
-    makeButton(this, 260, 410, 360, 80, has ? t('cont') : t('play'), () => { if (!G.career) G.career = newCareer(); go(); }, { color: 0x1e9e4a, size: 34 });
+    makeButton(this, 260, 410, 360, 80, has ? t('cont') : t('play'), () => { if (!G.career) G.career = newCareer(); go(); }, { color: 0x5f8a2a, size: 34 });
     if (has) {
       let armed = false;
       const nb = makeButton(this, 260, 505, 360, 56, t('newCareer'), () => {
@@ -137,11 +145,11 @@ class GarageScene extends Phaser.Scene {
     hg.fillStyle(0x000000, 0.5).fillRect(0, 0, GW, 64);
     hg.fillStyle(0xffb52a, 1).fillRect(0, 62, GW, 3);
     this.add.text(24, 32, t('garage'), { fontFamily: FONT, fontSize: '32px', color: '#ffb52a', resolution: 2 }).setOrigin(0, 0.5);
-    this.add.text(250, 32, money(c.money), { fontFamily: FONT, fontSize: '30px', color: '#7dff6a', stroke: '#000', strokeThickness: 3, resolution: 2 }).setOrigin(0, 0.5);
-    this.add.text(520, 32, `${t('points')}: ${c.points} / ${BOSS_POINTS}`, { fontFamily: FONT, fontSize: '22px', color: '#ffffff', resolution: 2 }).setOrigin(0, 0.5);
+    this.add.text(345, 32, money(c.money), { fontFamily: FONT, fontSize: '30px', color: '#7dff6a', stroke: '#000', strokeThickness: 3, resolution: 2 }).setOrigin(0, 0.5);
+    this.add.text(545, 32, `${t('points')}: ${c.points} / ${BOSS_POINTS}`, { fontFamily: FONT, fontSize: '22px', color: '#ffffff', resolution: 2 }).setOrigin(0, 0.5);
     this.add.text(820, 32, t('raceNo', c.raceNo), { fontFamily: FONT, fontSize: '20px', color: '#aab', resolution: 2 }).setOrigin(0, 0.5);
-    const sb = makeButton(this, GW - 70, 32, 110, 40, Sound.muted ? '🔇 OFF' : '🔊 ON', () => { Sound.toggle(); sb.setLabel(Sound.muted ? '🔇 OFF' : '🔊 ON'); }, { color: 0x34495e, size: 16 });
-    makeButton(this, GW - 190, 32, 110, 40, 'MENU', () => this.scene.start('title'), { color: 0x34495e, size: 16 });
+    const sb = makeButton(this, GW - 70, 32, 110, 40, Sound.muted ? '🔇 OFF' : '🔊 ON', () => { Sound.toggle(); sb.setLabel(Sound.muted ? '🔇 OFF' : '🔊 ON'); }, { color: 0x4a3f36, size: 16 });
+    makeButton(this, GW - 190, 32, 110, 40, 'MENU', () => this.scene.start('title'), { color: 0x4a3f36, size: 16 });
     this.buildCar(c); this.buildShop(c); this.buildRanking(c); this.buildRaces(c);
   }
 
@@ -149,10 +157,10 @@ class GarageScene extends Phaser.Scene {
     const x = 20, y = 80, w = 400, h = 470;
     panel(this, x, y, w, h, CARS[c.car].name.toUpperCase());
     const st = carStats(c.car, c.up, c.mg);
-    const sp = this.add.image(x + w / 2, y + 130, carTexture(this, st.shape, PLAYER_COLOR)).setScale(1.9).setAngle(-8);
-    this.add.image(x + w / 2 + 8, y + 142, carShadowTexture(this, st.shape)).setScale(1.9).setAngle(-8).setAlpha(0.4).setDepth(0.5);
-    sp.setDepth(1);
-    this.tweens.add({ targets: sp, y: sp.y - 4, yoyo: true, repeat: -1, duration: 1200, ease: 'Sine.InOut' });
+    this.add.image(x + w / 2 + 10, y + 166, 'soft').setTint(0x000000).setAlpha(0.5).setScale(3.4, 1.3).setDepth(0.5);
+    const sp = addCarImage(this, x + w / 2, y + 160, st.shape, PLAYER_COLOR, 1.75, 0.5).setDepth(1);
+    let ang = 0.5;
+    this.time.addEvent({ delay: 50, loop: true, callback: () => { ang += 0.022; sp.setFrame(carFrame(ang).name); } });
     const fr = statFracs(st);
     statBar(this, x + 24, y + 236, w - 48, t('speed'), fr.speed);
     statBar(this, x + 24, y + 264, w - 48, t('accel'), fr.accel);
@@ -169,11 +177,11 @@ class GarageScene extends Phaser.Scene {
     makeButton(this, x + 105, y + 432, 170, 50, damaged ? t('repair', money(cost)) : t('repaired'), () => {
       if (c.money < cost) { toast(this, t('noMoney')); Sound.play('deny'); return; }
       c.money -= cost; c.hp = mh; Sound.play('buy'); Save.store(c); this.rebuild();
-    }, { color: 0x2f6fd0, size: 16, disabled: !damaged });
+    }, { color: 0x3f6a7a, size: 16, disabled: !damaged });
     makeButton(this, x + 292, y + 432, 170, 50, t('repairAd'), async () => {
       const ok = await Poki.rewardedBreak();
       if (ok) { c.hp = mh; Sound.play('buy'); Save.store(c); this.rebuild(); }
-    }, { color: 0x8e44ad, size: 16, disabled: !(damaged && c.hp < mh * 0.8) });
+    }, { color: 0x7a3f8a, size: 16, disabled: !(damaged && c.hp < mh * 0.8) });
   }
 
   buildShop(c) {
@@ -199,7 +207,7 @@ class GarageScene extends Phaser.Scene {
       makeButton(this, x + w - 72, ry, 112, 40, maxed ? t('max') : money(r.cost), () => {
         if (c.money < r.cost) { toast(this, t('noMoney')); Sound.play('deny'); return; }
         c.money -= r.cost; r.buy(); Sound.play('buy'); Save.store(c); this.rebuild();
-      }, { color: c.money >= r.cost ? 0x1e9e4a : 0x6b3030, size: 16, disabled: maxed });
+      }, { color: c.money >= r.cost ? 0x5f8a2a : 0x6b3030, size: 16, disabled: maxed });
     });
     makeButton(this, x + w / 2, y + h - 40, w - 60, 52, '🚗  ' + t('dealer'), () => this.showDealer(), { color: 0xc0601a, size: 22 });
   }
@@ -270,7 +278,7 @@ class GarageScene extends Phaser.Scene {
     layer.add(this.add.text(GW / 2, GH / 2 - 30, t('tip'), { fontFamily: FONT_B, fontSize: '20px', fontStyle: 'bold', color: '#ffffff', align: 'center', resolution: 2, wordWrap: { width: 580 } }).setOrigin(0.5));
     layer.add(this.add.text(GW / 2, GH / 2 + 38, t('controls').replace(/ {3}· {3}/g, '  ·  '), { fontFamily: FONT_B, fontSize: '14px', fontStyle: 'bold', color: '#ffb52a', align: 'center', resolution: 2, wordWrap: { width: 600 } }).setOrigin(0.5));
     layer.add(this.add.text(GW / 2, GH / 2 + 76, t('controlsTouch'), { fontFamily: FONT_B, fontSize: '15px', color: '#b0b0bc', align: 'center', resolution: 2 }).setOrigin(0.5));
-    layer.add(makeButton(this, GW / 2, GH / 2 + 120, 220, 56, 'OK', () => { c.tipSeen = true; Save.store(c); layer.destroy(); }, { color: 0x1e9e4a }));
+    layer.add(makeButton(this, GW / 2, GH / 2 + 120, 220, 56, 'OK', () => { c.tipSeen = true; Save.store(c); layer.destroy(); }, { color: 0x5f8a2a }));
   }
 
   showDealer() {
@@ -288,7 +296,7 @@ class GarageScene extends Phaser.Scene {
       g.lineStyle(3, i === c.car ? 0xffb52a : 0x3a3d48, 1).strokeRoundedRect(x, y, w, h, 14);
       layer.add(g);
       layer.add(this.add.text(x + w / 2, y + 30, car.name.toUpperCase(), { fontFamily: FONT, fontSize: '26px', color: '#ffffff', resolution: 2 }).setOrigin(0.5));
-      layer.add(this.add.image(x + w / 2, y + 110, carTexture(this, car.shape, PLAYER_COLOR)).setScale(1.5).setAngle(-8));
+      layer.add(addCarImage(this, x + w / 2, y + 140, car.shape, PLAYER_COLOR, 1.45, 0.5));
       const st = carStats(i, { engine: 0, tires: 0, plating: 0 }, 0), fr = statFracs(st);
       [['speed', fr.speed], ['accel', fr.accel], ['handling', fr.handling], ['armor', fr.hp]].forEach(([k, v], j) => {
         const by = y + 190 + j * 30;
@@ -304,10 +312,10 @@ class GarageScene extends Phaser.Scene {
         if (c.money < net) { toast(this, t('noMoney')); Sound.play('deny'); return; }
         c.money -= Math.max(0, net); c.car = i; c.up = { engine: 0, tires: 0, plating: 0 }; c.hp = maxHp(c);
         Sound.play('buy'); Save.store(c); layer.destroy(); this.rebuild(); toast(this, t('bought'), '#7dff6a');
-      }, { color: own ? 0x555555 : c.money >= net ? 0x1e9e4a : 0x6b3030, size: 18, disabled: own || i < c.car });
+      }, { color: own ? 0x555555 : c.money >= net ? 0x5f8a2a : 0x6b3030, size: 18, disabled: own || i < c.car });
       layer.add(btn);
     });
-    layer.add(makeButton(this, GW / 2, GH - 50, 260, 54, t('close'), () => layer.destroy(), { color: 0x34495e }));
+    layer.add(makeButton(this, GW / 2, GH - 50, 260, 54, t('close'), () => layer.destroy(), { color: 0x4a3f36 }));
   }
 }
 
@@ -381,9 +389,9 @@ class ResultsScene extends Phaser.Scene {
         if (ok) { res.doubled = true; c.money += pr.prize; Save.store(c); this.totalT.setText(`${t('total')}: ${money(total + pr.prize)}`); toast(this, t('doubled'), '#7dff6a'); Sound.play('cash'); }
         else db.setEnabled(true);
         if (res.doubled) db.setVisible(false);
-      }, { color: 0x8e44ad, size: 20 });
-      makeButton(this, GW / 2 + 170, by, 300, 60, t('toGarage'), next, { color: 0x1e9e4a, size: 22 });
-    } else makeButton(this, GW / 2, by, 320, 60, t('toGarage'), next, { color: 0x1e9e4a, size: 22 });
+      }, { color: 0x7a3f8a, size: 20 });
+      makeButton(this, GW / 2 + 170, by, 300, 60, t('toGarage'), next, { color: 0x5f8a2a, size: 22 });
+    } else makeButton(this, GW / 2, by, 320, 60, t('toGarage'), next, { color: 0x5f8a2a, size: 22 });
     this.input.keyboard.once('keydown-ENTER', next);
   }
 }
@@ -398,9 +406,10 @@ class VictoryScene extends Phaser.Scene {
     this.add.text(GW / 2, 170, t('victory'), { fontFamily: FONT, fontSize: '68px', color: '#ffe14a', stroke: '#5a2a00', strokeThickness: 10, resolution: 2 }).setOrigin(0.5);
     this.add.text(GW / 2, 260, t('victoryTxt'), { fontFamily: FONT_B, fontSize: '24px', fontStyle: 'bold', color: '#ffffff', resolution: 2 }).setOrigin(0.5);
     this.add.text(GW / 2, 310, t('stats', c.races, c.wins, c.kills), { fontFamily: FONT_B, fontSize: '20px', color: '#b0b0bc', resolution: 2 }).setOrigin(0.5);
-    const car = this.add.image(GW / 2, 420, carTexture(this, CARS[c.car].shape, PLAYER_COLOR)).setScale(2.2);
-    this.tweens.add({ targets: car, angle: 360, duration: 6000, repeat: -1 });
-    makeButton(this, GW / 2 - 170, 600, 300, 64, t('cont'), () => this.scene.start('garage'), { color: 0x1e9e4a });
+    const car = addCarImage(this, GW / 2, 460, CARS[c.car].shape, PLAYER_COLOR, 2.2, 0);
+    let ang = 0;
+    this.time.addEvent({ delay: 40, loop: true, callback: () => { ang += 0.04; car.setFrame(carFrame(ang).name); } });
+    makeButton(this, GW / 2 - 170, 600, 300, 64, t('cont'), () => this.scene.start('garage'), { color: 0x5f8a2a });
     makeButton(this, GW / 2 + 170, 600, 300, 64, t('newCareer'), () => { Save.clear(); G.career = newCareer(); this.scene.start('garage'); }, { color: 0x8a2a2a, size: 22 });
     this.time.addEvent({ delay: 60, loop: true, callback: () => {
       const im = this.add.image(rnd(0, GW), -10, 'px').setTint(pick([0xffe14a, 0xff4a3a, 0x4ab8ff, 0x7dff6a, 0xff8ae8])).setScale(rnd(1.5, 3));

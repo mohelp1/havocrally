@@ -12,7 +12,11 @@
       font: 900 26px "Arial Black", Arial, sans-serif; align-items: center; justify-content: center; text-align: center; padding: 20px; }
     @media (orientation: portrait) and (pointer: coarse) { #rotate { display: flex; } }
   </style>
-  <script src="https://game-cdn.poki.com/scripts/v2/poki-sdk.js"></script>
+  <script>
+    // Poki SDK only on Poki domains (or with ?poki=1 for testing); elsewhere the game runs without ads
+    if (/poki/i.test(location.hostname) || /[?&]poki=1/.test(location.search))
+      document.write('<script src="https://game-cdn.poki.com/scripts/v2/poki-sdk.js"><\/script>');
+  </script>
 </head>
 <body>
   <div id="game"></div>
