@@ -88,17 +88,30 @@ function carStats(carIdx, up, mgLvl, mult = 1) {
 // ---------------- jezdci ----------------
 const PLAYER_COLOR = 0xd8262e;
 const DRIVERS = [
-  { id: 'bara',   name: 'Rust Widow',     color: 0x3fa7ff, skill: 0.32, tier: 0, pts: 2 },
+  { id: 'bara',   name: 'Rust Widow',     color: 0x3fa7ff, skill: 0.32, tier: 0, pts: 2, vis: 7 },
   { id: 'kudla',  name: 'Shiv',               color: 0xffd23f, skill: 0.38, tier: 0, pts: 4, vis: 4 },
-  { id: 'srot',   name: 'Doc Scrap',    color: 0x8fd14f, skill: 0.44, tier: 0, pts: 6 },
-  { id: 'vyfuk',  name: 'Gasket', color: 0xff8a3d, skill: 0.5,  tier: 1, pts: 9 },
-  { id: 'rada',   name: 'Rusty Rudy',   color: 0xb87a3d, skill: 0.56, tier: 1, pts: 12 },
-  { id: 'mlynek', name: 'Grinder',           color: 0x9b59ff, skill: 0.63, tier: 1, pts: 16, vis: 4 },
-  { id: 'zdena',  name: 'Toothy Tess', color: 0xff4fa3, skill: 0.71, tier: 2, pts: 20 },
+  { id: 'srot',   name: 'Doc Scrap',    color: 0x8fd14f, skill: 0.44, tier: 0, pts: 6, vis: 6 },
+  { id: 'vyfuk',  name: 'Gasket', color: 0xff8a3d, skill: 0.5,  tier: 1, pts: 9, vis: 5 },
+  { id: 'rada',   name: 'Rusty Rudy',   color: 0xb87a3d, skill: 0.56, tier: 1, pts: 12, vis: 0 },
+  { id: 'mlynek', name: 'Grinder',           color: 0x9b59ff, skill: 0.63, tier: 1, pts: 16, vis: 2 },
+  { id: 'zdena',  name: 'Toothy Tess', color: 0xff4fa3, skill: 0.71, tier: 2, pts: 20, vis: 7 },
   { id: 'jed',    name: 'Jinx',           color: 0x2de0c0, skill: 0.79, tier: 2, pts: 25, vis: 4 },
-  { id: 'hrom',   name: 'Sandstorm',             color: 0xe8e8e8, skill: 0.87, tier: 3, pts: 31 }
+  { id: 'hrom',   name: 'Sandstorm',             color: 0xe8e8e8, skill: 0.87, tier: 3, pts: 31, vis: 5 }
 ];
-const BOSS = { id: 'baron', name: 'Black Baron', color: 0x262626, skill: 1.0, tier: 3, pts: 50 };
+const BOSS = { id: 'baron', name: 'Black Baron', color: 0x262626, skill: 1.0, tier: 3, pts: 50, vis: 3 };
+// each rival's own paint job and bolted-on scrap (see carModel in art.js)
+const KITS = {
+  bara:   { rust: 0.18, decals: ['flames'], addons: ['zoomies'] },
+  kudla:  { rust: 0.3, decals: ['hazard'], addons: ['flags'], flag: '#d8b020' },
+  srot:   { rust: 0.3, decals: ['skull'], addons: ['ladder', 'roofTires'] },
+  vyfuk:  { rust: 0.22, decals: ['twotone'], addons: ['bedjunk', 'cage'], col2: '#2a1a12' },
+  rada:   { rust: 0.55, decals: ['rustheavy'], addons: ['roofTires', 'harpoon'] },
+  mlynek: { rust: 0.2, decals: ['checker'], addons: ['saws'] },
+  zdena:  { rust: 0.12, decals: ['teeth'], addons: ['harpoon', 'flags'], flag: '#ff4fa3' },
+  jed:    { rust: 0.25, decals: ['camo'], addons: ['flags'], flag: '#2de0c0' },
+  hrom:   { rust: 0.3, decals: ['camo', 'twotone'], addons: ['ram', 'cage'], col2: '#6a5a40' },
+  baron:  { rust: 0.08, decals: ['skull', 'hazard'], addons: ['ram', 'bigspikes', 'flags'], flag: '#8a1010' }
+};
 const BOSS_POINTS = 50;
 const driverDef = id => (id === 'baron' ? BOSS : DRIVERS.find(d => d.id === id));
 
@@ -119,8 +132,20 @@ const TRACKS = [
   { name: 'Ashlands', theme: 'ash', grip: 0.95, long: true,
     pts: [[12, 3], [22, 3], [24, 6], [21, 9], [12, 9], [10, 11], [12, 13], [22, 13], [24, 16], [21, 19], [4, 19], [2, 16], [2, 6], [4, 3]] },
   { name: "Baron's Fire Pit", theme: 'night', grip: 1, long: true,
-    pts: [[7, 3], [11, 3], [14, 7], [18, 3], [24, 3], [26, 6], [26, 16], [23, 19], [17, 19], [15, 15], [11, 15], [9, 19], [4, 19], [2, 16], [4, 12], [2, 8], [3, 4]] }
+    pts: [[7, 3], [11, 3], [14, 7], [18, 3], [24, 3], [26, 6], [26, 16], [23, 19], [17, 19], [15, 15], [11, 15], [9, 19], [4, 19], [2, 16], [4, 12], [2, 8], [3, 4]] },
+  { name: 'Red Canyon Run', theme: 'canyon', grip: 1, long: true,
+    pts: [[10, 3], [18, 3], [22, 5], [22, 8], [18, 10], [12, 10], [9, 12], [9, 15], [12, 17], [20, 17], [23, 19], [21, 22], [6, 22], [3, 19], [3, 12], [5, 8], [3, 5], [5, 3]] },
+  { name: 'Toxic Sump', theme: 'toxic', grip: 0.92,
+    pts: [[8, 4], [16, 4], [19, 6], [19, 9], [16, 11], [11, 11], [9, 13], [11, 15], [17, 15], [20, 17], [19, 20], [14, 21], [5, 21], [2, 18], [2, 8], [4, 5]] },
+  { name: 'Bone Valley', theme: 'desert', grip: 1, long: true,
+    pts: [[12, 3], [20, 3], [24, 5], [24, 8], [20, 11], [20, 14], [24, 17], [24, 20], [20, 23], [8, 23], [4, 20], [4, 17], [8, 14], [8, 11], [4, 8], [4, 5], [7, 3]] },
+  { name: 'Rust Belt', theme: 'scrap', grip: 1, long: true,
+    pts: [[6, 3], [14, 3], [16, 5], [18, 3], [24, 3], [26, 5], [26, 10], [23, 12], [16, 12], [14, 14], [14, 18], [16, 20], [24, 20], [26, 22], [24, 25], [5, 25], [3, 22], [3, 15], [6, 12], [3, 9], [3, 5]] },
+  { name: 'Cinder Loop', theme: 'ash', grip: 0.95, long: true,
+    pts: [[10, 3], [19, 3], [23, 5], [24, 9], [21, 12], [17, 12], [15, 14], [17, 16], [22, 17], [23, 20], [19, 23], [8, 23], [4, 20], [3, 15], [6, 12], [4, 9], [3, 5], [6, 3]] }
 ];
+const BOSS_TRACK = 4;
+const RACE_TRACKS = TRACKS.map((_, i) => i).filter(i => i !== BOSS_TRACK);
 
 // ---------------- kariéra ----------------
 function newCareer() {
@@ -138,14 +163,14 @@ const maxHp = c => carStats(c.car, c.up, c.mg).hp;
 function makeOffers(c) {
   const ranked = c.drivers.slice().sort((a, b) => a.points - b.points);
   const pools = [ranked.slice(0, 5), ranked.slice(2, 7), ranked.slice(4, 9)];
-  const tracks = shuffle([0, 1, 2, 3]);
+  const tracks = shuffle(RACE_TRACKS.slice());
   const offers = [0, 1, 2].map(d => ({
     diff: d, track: tracks[d], laps: LAPS[d] - (TRACKS[tracks[d]].long ? 1 : 0),
     opp: shuffle(pools[d].map(x => x.id)).slice(0, 3)
   }));
   if (c.points >= BOSS_POINTS) {
     const top = ranked.slice(-2).map(x => x.id);
-    offers.push({ diff: 3, track: 4, laps: LAPS[3] - 1, opp: ['baron', ...top] });
+    offers.push({ diff: 3, track: BOSS_TRACK, laps: LAPS[3] - 1, opp: ['baron', ...top] });
   }
   return offers;
 }

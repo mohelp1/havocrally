@@ -247,15 +247,15 @@ function menuBackdrop(scene) {
 }
 // buggies and war cars tearing across the screen, kicking up dust
 function startConvoy(scene, y, scale, depth) {
-  const lineup = [[4, 0x9b59ff], [1, 0xff8a3d], [4, 0x2de0c0], [3, 0xffd23f], [2, 0xd8262e]];
+  const lineup = [[4, 0xffd23f, 'kudla'], [7, 0xff4fa3, 'zdena'], [5, 0xff8a3d, 'vyfuk'], [6, 0x8fd14f, 'srot'], [7, 0x3fa7ff, 'bara'], [3, 0x262626, 'baron']];
   const cars = [];
   let timer = 0.5, idx = 0;
   scene.convoy = dt => {
     timer -= dt;
     if (timer <= 0) {
       timer = rnd(1.4, 3.2);
-      const [shape, col] = lineup[idx++ % lineup.length], yy = y + rnd(-14, 14);
-      const im = addCarImage(scene, -80, yy, shape, col, scale, 0).setDepth(depth + yy * 0.001);
+      const [shape, col, kit] = lineup[idx++ % lineup.length], yy = y + rnd(-14, 14);
+      const im = addCarImage(scene, -80, yy, shape, col, scale, 0, false, kit).setDepth(depth + yy * 0.001);
       cars.push({ im, v: rnd(380, 560), ph: rnd(0, 6), y: yy });
     }
     for (let i = cars.length - 1; i >= 0; i--) {

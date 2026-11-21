@@ -91,7 +91,7 @@ class BootScene extends Phaser.Scene {
 class TitleScene extends Phaser.Scene {
   constructor() { super('title'); }
   create() {
-    this.scene.launch('race', { demo: true, track: rndi(0, 3) });
+    this.scene.launch('race', { demo: true, track: pick(RACE_TRACKS) });
     this.scene.bringToTop();
     const g = this.add.graphics();
     g.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0.82, 0.15, 0.82, 0.15).fillRect(0, 0, GW, GH);
