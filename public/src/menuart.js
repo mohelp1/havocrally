@@ -114,9 +114,9 @@ function makeMenuTextures(scene) {
     sky.addColorStop(0, '#160a06'); sky.addColorStop(0.3, '#4a1c0c'); sky.addColorStop(0.55, '#b8561c'); sky.addColorStop(0.63, '#e08c3c');
     sky.addColorStop(0.635, '#3a2214'); sky.addColorStop(1, '#100a06');
     g.fillStyle = sky; g.fillRect(0, 0, W, H);
-    let gr = g.createRadialGradient(930, 430, 0, 930, 430, 300); gr.addColorStop(0, 'rgba(255,215,140,0.6)'); gr.addColorStop(1, 'rgba(255,160,80,0)');
+    let gr = g.createRadialGradient(930 * W / 1280, 430, 0, 930 * W / 1280, 430, 300); gr.addColorStop(0, 'rgba(255,215,140,0.6)'); gr.addColorStop(1, 'rgba(255,160,80,0)');
     g.fillStyle = gr; g.fillRect(0, 0, W, H);
-    circ(g, 930, 430, 58, 'rgba(255,225,170,0.55)');
+    circ(g, 930 * W / 1280, 430, 58, 'rgba(255,225,170,0.55)');
     for (let k = 0; k < 7; k++) { g.fillStyle = `rgba(60,25,10,${0.08 + rng() * 0.1})`; g.fillRect(0, 120 + k * 45 + rng() * 20, W, 8 + rng() * 20); }
     // mesas: far and mid silhouettes
     const ridge = (base, hmax, col, seed) => {
@@ -158,11 +158,11 @@ function makeMenuTextures(scene) {
       for (let x = x0; x <= x1; x += 26 * s) { g.fillRect(x - 2 * s, y - 34 * s, 4 * s, 34 * s); g.beginPath(); g.moveTo(x - 3 * s, y - 34 * s); g.lineTo(x, y - 46 * s); g.lineTo(x + 3 * s, y - 34 * s); g.fill(); }
     };
     const tires = (x, y, s) => { g.fillStyle = '#0d0704'; for (let r = 0; r < 4; r++) for (let k = 0; k <= 3 - r; k++) { g.beginPath(); g.ellipse(x + (k - (3 - r) / 2) * 16 * s, y - r * 9 * s, 8 * s, 5 * s, 0, 0, 7); g.fill(); } };
-    fence(40, 330, HZ + 40, 0.7); fence(840, 1240, HZ + 38, 0.65);
-    tires(380, HZ + 44, 0.8); tires(760, HZ + 48, 0.9);
-    [[150, HZ + 50, 0.3], [520, HZ + 44, 0.25], [1060, HZ + 48, 0.28], [1190, HZ + 58, 0.32]].forEach(([x, y, s], i) => drawBonePile(g, x, y, s, 11 + i));
-    [[260, HZ + 125, 0.75], [1000, HZ + 160, 0.9], [640, HZ + 95, 0.5]].forEach(([x, y, s], i) => drawBonePile(g, x, y, s, 31 + i));
-    for (const [x, y, s] of [[66, HZ + 6, 0.32], [222, HZ + 6, 0.32], [880, HZ + 8, 0.3], [1140, HZ + 8, 0.3]]) drawHornedSkull(g, x, y, s);
+    fence(40 * W / 1280, 330 * W / 1280, HZ + 40, 0.7); fence(840 * W / 1280, 1240 * W / 1280, HZ + 38, 0.65);
+    tires(380 * W / 1280, HZ + 44, 0.8); tires(760 * W / 1280, HZ + 48, 0.9);
+    [[150, HZ + 50, 0.3], [520, HZ + 44, 0.25], [1060, HZ + 48, 0.28], [1190, HZ + 58, 0.32]].forEach(([x, y, s], i) => drawBonePile(g, x * W / 1280, y, s, 11 + i));
+    [[260, HZ + 125, 0.75], [1000, HZ + 160, 0.9], [640, HZ + 95, 0.5]].forEach(([x, y, s], i) => drawBonePile(g, x * W / 1280, y, s, 31 + i));
+    for (const [x, y, s] of [[66, HZ + 6, 0.32], [222, HZ + 6, 0.32], [880, HZ + 8, 0.3], [1140, HZ + 8, 0.3]]) drawHornedSkull(g, x * W / 1280, y, s);
     // warm sunset light over the bones
     g.globalCompositeOperation = 'multiply'; g.fillStyle = 'rgba(230,150,90,0.55)'; g.fillRect(0, HZ, W, H - HZ); g.globalCompositeOperation = 'source-over';
     scene.textures.addCanvas('menubg', cv);
@@ -234,16 +234,17 @@ function menuTick(scene, delta) {
       scene.mfx.spawn('soft', f.x + rnd(-5, 5) * f.s, f.y, { tint: pick([0xffd040, 0xff8a1a, 0xff5a10]), add: true, life: rnd(0.35, 0.65), s0: 0.45 * f.s, s1: 0.06, a0: 0.95, vx: rnd(-6, 10), vy: -rnd(45, 85) * f.s, depth: f.depth === undefined ? -5 : f.depth });
       if (Math.random() < 0.35) scene.mfx.spawn('smoke', f.x, f.y - 14 * f.s, { tint: 0x141010, life: 2.4, s0: 0.3 * f.s, s1: 1.6 * f.s, a0: 0.45, vx: rnd(12, 30), vy: -rnd(25, 45), vr: rnd(-0.5, 0.5), depth: (f.depth === undefined ? -5 : f.depth) - 0.1 });
     }
-    if (scene.mEmbers) for (let k = 0; k < 2; k++) scene.mfx.spawn('soft', rnd(0, GW), GH + 10, { tint: pick([0xff8a2a, 0xffb040]), add: true, life: rnd(3, 6), s0: rnd(0.05, 0.11), s1: 0.02, a0: 0.9, vx: rnd(-20, 30), vy: -rnd(60, 140), depth: 60 });
+    if (scene.mEmbers) for (let k = 0; k < 2; k++) scene.mfx.spawn('soft', rnd(0, GW) + scene.cameras.main.scrollX, GH + 10, { tint: pick([0xff8a2a, 0xffb040]), add: true, life: rnd(3, 6), s0: rnd(0.05, 0.11), s1: 0.02, a0: 0.9, vx: rnd(-20, 30), vy: -rnd(60, 140), depth: 60 });
   }
   scene.mfx.update(dt);
   if (scene.convoy) scene.convoy(dt);
 }
 function menuBackdrop(scene) {
   makeMenuTextures(scene);
-  scene.add.image(0, 0, 'menubg').setOrigin(0).setDepth(-10);
-  scene.add.image(GW / 2, GH / 2, 'vignette').setDisplaySize(GW, GH).setDepth(-9);
-  menuAmbience(scene, (G.menuFires || []).map(f => ({ ...f, depth: -6 })));
+  const ox = -scene.cameras.main.scrollX;
+  scene.add.image(-ox, 0, 'menubg').setOrigin(0).setDepth(-10);
+  scene.add.image(GW / 2 - ox, GH / 2, 'vignette').setDisplaySize(GW, GH).setDepth(-9);
+  menuAmbience(scene, (G.menuFires || []).map(f => ({ ...f, x: f.x - ox, depth: -6 })));
 }
 // buggies and war cars tearing across the screen, kicking up dust
 function startConvoy(scene, y, scale, depth) {

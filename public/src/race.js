@@ -4,7 +4,7 @@
 // ============================================================
 
 const CAR_R = 12, CAR_OFF = 10;            // two collision circles per car
-const CAM_ZOOM = 1.12, GUN_Z = 11;
+const CAM_ZOOM = MOBILE_UI ? 1.3 : 1.12, GUN_Z = 11;   // closer camera on phones
 const BULLET_SPEED = 1450, BULLET_LIFE = 0.42, FIRE_GAP = 0.085;
 const AMMO_BASE = 140, AMMO_MAX = 220;
 
@@ -572,7 +572,7 @@ class RaceScene extends Phaser.Scene {
       const dx = c.x - m.x, dy = c.y - m.y, d = Math.hypot(dx, dy);
       if (d > 60) continue;
       const f = 1 - d / 60;
-      if (!c.dead && !c.invuln) this.damage(c, 14 * f + 6, m.owner);
+      if (!c.dead && !c.invuln) this.damage(c, 21 * f + 9, m.owner);
       c.vx += dx / (d || 1) * 320 * f; c.vy += dy / (d || 1) * 320 * f; c.spin += rnd(-4, 4) * f;
     }
   }
@@ -755,6 +755,10 @@ class HudScene extends Phaser.Scene {
   constructor() { super('hud'); }
 
   create() {
+    // the HUD is built in a virtual area GW/z x GH/z and zoomed by z: bigger HUD and thumb buttons on phones
+    const z = MOBILE_UI ? 1.32 : 1;
+    this.cameras.main.setOrigin(0, 0).setZoom(z);
+    this.W = GW / z; this.H = GH / z;
     this.race = this.scene.get('race');
     this.input.addPointer(3);
     const txt = (x, y, s, size, col = '#fff', o = {}) => this.add.text(x, y, s, { fontFamily: FONT, fontSize: size + 'px', color: col, stroke: '#000', strokeThickness: 4, resolution: 2, ...o });
@@ -774,7 +778,7 @@ class HudScene extends Phaser.Scene {
     // minimap
     const tr = this.race.tr, mw = 230, mh = 160;
     const sc = Math.min((mw - 20) / tr.W, (mh - 20) / tr.H);
-    this.mm = { x: GW - mw - 14, y: 14, sc, ox: (mw - tr.W * sc) / 2, oy: (mh - tr.H * sc) / 2 };
+    this.mm = { x: this.W - mw - 14, y: 14, sc, ox: (mw - tr.W * sc) / 2, oy: (mh - tr.H * sc) / 2 };
     const mg = this.add.graphics();
     mg.fillStyle(0x000000, 0.45).fillRoundedRect(this.mm.x, this.mm.y, mw, mh, 12);
     mg.lineStyle(7, 0xffffff, 0.25); mg.beginPath();
@@ -787,12 +791,12 @@ class HudScene extends Phaser.Scene {
     // standings list under minimap
     this.listG = this.add.graphics();
     this.listT = [];
-    for (let i = 0; i < this.race.cars.length; i++) this.listT.push(this.add.text(GW - mw - 4, 186 + i * 26, '', { fontFamily: FONT_B, fontSize: '15px', fontStyle: 'bold', color: '#fff', stroke: '#000', strokeThickness: 3, resolution: 2 }));
+    for (let i = 0; i < this.race.cars.length; i++) this.listT.push(this.add.text(this.W - mw - 4, 186 + i * 26, '', { fontFamily: FONT_B, fontSize: '15px', fontStyle: 'bold', color: '#fff', stroke: '#000', strokeThickness: 3, resolution: 2 }));
     // pause button
-    this.pauseBtn = this.add.zone(GW - mw - 50, 44, 60, 60).setInteractive({ useHandCursor: true });
+    this.pauseBtn = this.add.zone(this.W - mw - 50, 44, 60, 60).setInteractive({ useHandCursor: true });
     const pb = this.add.graphics();
-    pb.fillStyle(0x000000, 0.45).fillRoundedRect(GW - mw - 76, 18, 52, 52, 10);
-    pb.fillStyle(0xffffff, 0.9).fillRect(GW - mw - 60, 32, 7, 24).fillRect(GW - mw - 47, 32, 7, 24);
+    pb.fillStyle(0x000000, 0.45).fillRoundedRect(this.W - mw - 76, 18, 52, 52, 10);
+    pb.fillStyle(0xffffff, 0.9).fillRect(this.W - mw - 60, 32, 7, 24).fillRect(this.W - mw - 47, 32, 7, 24);
     this.pauseBtn.on('pointerdown', () => this.race.togglePause());
     // messages
     this.msgs = [];
@@ -802,16 +806,16 @@ class HudScene extends Phaser.Scene {
     this.events.once('shutdown', () => {
       this.race.events.off('msg', this.onMsg, this); this.race.events.off('count', this.onCount, this); this.race.events.off('hurt', this.onHurt, this);
     });
-    this.countT = txt(GW / 2, GH / 2 - 60, '', 140, '#ffe14a', { strokeThickness: 10 }).setOrigin(0.5).setAlpha(0);
-    this.wrongT = txt(GW / 2, 190, t('wrongWay'), 40, '#ff4a3a').setOrigin(0.5).setVisible(false);
-    this.hurtR = this.add.rectangle(GW / 2, GH / 2, GW, GH, 0xff0000, 0).setDepth(-1);
+    this.countT = txt(this.W / 2, this.H / 2 - 60, '', 140, '#ffe14a', { strokeThickness: 10 }).setOrigin(0.5).setAlpha(0);
+    this.wrongT = txt(this.W / 2, 190, t('wrongWay'), 40, '#ff4a3a').setOrigin(0.5).setVisible(false);
+    this.hurtR = this.add.rectangle(this.W / 2, this.H / 2, this.W, this.H, 0xff0000, 0).setDepth(-1);
     // ambience: dusty vignette + blowing sand / ash / embers (screen space, under the HUD)
     const haze = this.race.tr.theme.haze;
-    this.add.image(GW / 2, GH / 2, 'vignette').setDisplaySize(GW, GH).setDepth(-3);
-    this.add.rectangle(GW / 2, GH / 2, GW, GH, haze === 'ash' ? 0x5a4c44 : haze === 'toxic' ? 0x7aa030 : haze === 'ember' ? 0xff6a20 : 0xd89a58, haze === 'ember' ? 0.05 : 0.07).setDepth(-3);
+    this.add.image(this.W / 2, this.H / 2, 'vignette').setDisplaySize(this.W, this.H).setDepth(-3);
+    this.add.rectangle(this.W / 2, this.H / 2, this.W, this.H, haze === 'ash' ? 0x5a4c44 : haze === 'toxic' ? 0x7aa030 : haze === 'ember' ? 0xff6a20 : 0xd89a58, haze === 'ember' ? 0.05 : 0.07).setDepth(-3);
     this.amb = { type: haze, g: this.add.graphics().setDepth(-2), p: [] };
     if (haze === 'ember') this.amb.g.setBlendMode(Phaser.BlendModes.ADD);
-    for (let k = 0; k < (haze === 'sand' ? 46 : 60); k++) this.amb.p.push({ x: rnd(0, GW), y: rnd(0, GH), v: rnd(0.6, 1.4), l: rnd(18, 60), a: rnd(0.08, 0.28), ph: rnd(0, 7) });
+    for (let k = 0; k < (haze === 'sand' ? 46 : 60); k++) this.amb.p.push({ x: rnd(0, this.W), y: rnd(0, this.H), v: rnd(0.6, 1.4), l: rnd(18, 60), a: rnd(0.08, 0.28), ph: rnd(0, 7) });
     // touch controls
     this.buildTouch();
     // pause overlay
@@ -819,7 +823,7 @@ class HudScene extends Phaser.Scene {
   }
 
   onMsg(text, color, big) {
-    const m = this.txt(GW / 2, 0, text, big ? 44 : 26, color).setOrigin(0.5);
+    const m = this.txt(this.W / 2, 0, text, big ? 44 : 26, color).setOrigin(0.5);
     this.msgs.unshift(m);
     this.msgs.forEach((o, i) => { o.y = 250 - i * (big ? 50 : 34); if (i > 3) { o.destroy(); } });
     this.msgs.length = Math.min(this.msgs.length, 4);
@@ -838,12 +842,12 @@ class HudScene extends Phaser.Scene {
     const coarse = (() => { try { return navigator.maxTouchPoints > 0 && window.matchMedia('(pointer: coarse)').matches; } catch (e) { return false; } })();
     this.touchOn = coarse || !!G.touch;
     this.tbtn = [
-      { k: 'left', x: 110, y: 610, r: 78, label: '◀' },
-      { k: 'right', x: 290, y: 610, r: 78, label: '▶' },
-      { k: 'fire', x: GW - 120, y: 600, r: 82, label: '●', sub: 'GUN' },
-      { k: 'brake', x: GW - 290, y: 640, r: 56, label: '▼', sub: 'BRAKE' },
-      { k: 'nitro', x: GW - 135, y: 420, r: 56, label: '⚡', sub: 'NITRO' },
-      { k: 'mine', x: GW - 300, y: 490, r: 56, label: '✸', sub: 'MINE' }
+      { k: 'left', x: 100, y: this.H - 105, r: 74, label: '◀' },
+      { k: 'right', x: 268, y: this.H - 105, r: 74, label: '▶' },
+      { k: 'fire', x: this.W - 105, y: this.H - 115, r: 78, label: '●', sub: 'GUN' },
+      { k: 'brake', x: this.W - 265, y: this.H - 70, r: 52, label: '▼', sub: 'BRAKE' },
+      { k: 'nitro', x: this.W - 105, y: this.H - 270, r: 52, label: '⚡', sub: 'NITRO' },
+      { k: 'mine', x: this.W - 255, y: this.H - 200, r: 52, label: '✸', sub: 'MINE' }
     ];
     this.touchG = this.add.graphics();
     this.touchTxt = this.tbtn.map(b => [
@@ -860,7 +864,8 @@ class HudScene extends Phaser.Scene {
     const state = {};
     if (on) for (const p of this.input.manager.pointers) {
       if (!p.isDown) continue;
-      for (const b of this.tbtn) if (Math.hypot(p.x - b.x, p.y - b.y) < b.r * 1.25) state[b.k] = true;
+      const wp = this.cameras.main.getWorldPoint(p.x, p.y);
+      for (const b of this.tbtn) if (Math.hypot(wp.x - b.x, wp.y - b.y) < b.r * 1.25) state[b.k] = true;
     }
     for (const b of this.tbtn) {
       tc[b.k] = !!state[b.k];
@@ -877,15 +882,15 @@ class HudScene extends Phaser.Scene {
     for (const q of A.p) {
       if (A.type === 'sand') {
         q.x += 520 * q.v * dt; q.y += 90 * q.v * dt;
-        if (q.x > GW + 60 || q.y > GH + 20) { q.x = rnd(-200, GW * 0.6); q.y = rnd(-40, GH); }
+        if (q.x > this.W + 60 || q.y > this.H + 20) { q.x = rnd(-200, this.W * 0.6); q.y = rnd(-40, this.H); }
         g.lineStyle(1.6, 0xead2a2, q.a); g.lineBetween(q.x, q.y, q.x - q.l, q.y - q.l * 0.17);
       } else if (A.type === 'ash' || A.type === 'toxic') {
         q.ph += dt * 2; q.x += (20 + Math.sin(q.ph) * 30) * q.v * dt; q.y += 38 * q.v * dt;
-        if (q.y > GH + 10) { q.y = -10; q.x = rnd(0, GW); }
+        if (q.y > this.H + 10) { q.y = -10; q.x = rnd(0, this.W); }
         g.fillStyle(A.type === 'toxic' ? 0xc8f060 : 0xb0a8a0, q.a * 1.6).fillRect(q.x, q.y, 2.4 * q.v, 2.4 * q.v);
       } else {
         q.ph += dt * 6; q.x += Math.sin(q.ph * 0.5) * 20 * dt; q.y -= 45 * q.v * dt;
-        if (q.y < -10) { q.y = GH + 10; q.x = rnd(0, GW); }
+        if (q.y < -10) { q.y = this.H + 10; q.x = rnd(0, this.W); }
         g.fillStyle(0xff8a2a, (0.4 + 0.4 * Math.sin(q.ph)) * q.a * 2.5).fillCircle(q.x, q.y, 1.6 * q.v);
       }
     }
@@ -896,11 +901,11 @@ class HudScene extends Phaser.Scene {
     if (this.pauseC) { this.pauseC.destroy(); this.pauseC = null; }
     if (!on) return;
     const c = this.add.container(0, 0).setDepth(100);
-    c.add(this.add.rectangle(GW / 2, GH / 2, GW, GH, 0x000000, 0.65).setInteractive());
-    c.add(this.txt(GW / 2, 210, t('paused'), 72, '#ffe14a', { strokeThickness: 8 }).setOrigin(0.5));
-    c.add(makeButton(this, GW / 2, 350, 340, 70, t('resume'), () => this.race.togglePause(), { color: 0x5f8a2a }));
-    c.add(makeButton(this, GW / 2, 440, 340, 60, t('forfeit'), () => { this.race.paused = false; this.race.finishRace(true); }, { color: 0x8a2a2a, size: 22 }));
-    c.add(makeSoundButton(this, GW / 2, 530));
+    c.add(this.add.rectangle(this.W / 2, this.H / 2, this.W, this.H, 0x000000, 0.65).setInteractive());
+    c.add(this.txt(this.W / 2, 210, t('paused'), 72, '#ffe14a', { strokeThickness: 8 }).setOrigin(0.5));
+    c.add(makeButton(this, this.W / 2, 350, 340, 70, t('resume'), () => this.race.togglePause(), { color: 0x5f8a2a }));
+    c.add(makeButton(this, this.W / 2, 440, 340, 60, t('forfeit'), () => { this.race.paused = false; this.race.finishRace(true); }, { color: 0x8a2a2a, size: 22 }));
+    c.add(makeSoundButton(this, this.W / 2, 530));
     this.pauseC = c;
   }
 
@@ -926,13 +931,13 @@ class HudScene extends Phaser.Scene {
       const x = this.mm.x + this.mm.ox + c.x * this.mm.sc, y = this.mm.y + this.mm.oy + c.y * this.mm.sc;
       dg.fillStyle(0x000000, 1).fillCircle(x, y, c.isPlayer ? 6.5 : 5);
       dg.fillStyle(c.dead ? 0x555555 : c.color, 1).fillCircle(x, y, c.isPlayer ? 5 : 3.8);
-      const ty = 186 + i * 26;
-      lg.fillStyle(0x000000, c.isPlayer ? 0.6 : 0.4).fillRoundedRect(GW - 244, ty - 2, 230, 24, 6);
-      lg.fillStyle(c.color, 1).fillRect(GW - 240, ty + 3, 8, 14);
+      const lx = this.touchOn ? 14 : this.W - 244, ty = (this.touchOn ? 160 : 186) + i * 26;   // touch: list moves left, away from the buttons
+      lg.fillStyle(0x000000, c.isPlayer ? 0.6 : 0.4).fillRoundedRect(lx, ty - 2, 230, 24, 6);
+      lg.fillStyle(c.color, 1).fillRect(lx + 4, ty + 3, 8, 14);
       const hf = clamp(c.hp / c.maxHp, 0, 1);
-      lg.fillStyle(0x333333, 1).fillRect(GW - 80, ty + 8, 60, 6);
-      if (!c.dead) lg.fillStyle(hf > 0.5 ? 0x4ad04a : hf > 0.25 ? 0xffb020 : 0xff3a2a, 1).fillRect(GW - 80, ty + 8, 60 * hf, 6);
-      this.listT[i].setPosition(GW - 226, ty + 1).setText(`${i + 1}. ${c.name}${c.dead ? ' ✖' : c.finished ? ' ⚑' : ''}`).setColor(c.dead ? '#888' : c.isPlayer ? '#ffe14a' : '#fff');
+      lg.fillStyle(0x333333, 1).fillRect(lx + 164, ty + 8, 60, 6);
+      if (!c.dead) lg.fillStyle(hf > 0.5 ? 0x4ad04a : hf > 0.25 ? 0xffb020 : 0xff3a2a, 1).fillRect(lx + 164, ty + 8, 60 * hf, 6);
+      this.listT[i].setPosition(lx + 18, ty + 1).setText(`${i + 1}. ${c.name}${c.dead ? ' ✖' : c.finished ? ' ⚑' : ''}`).setColor(c.dead ? '#888' : c.isPlayer ? '#ffe14a' : '#fff');
     });
     this.wrongT.setVisible(p.wrongT > 1 && !p.dead && Math.floor(r.raceT * 3) % 2 === 0);
     this.updateAmbience();

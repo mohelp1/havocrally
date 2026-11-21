@@ -3,7 +3,16 @@
 //  HAVOC RALLY – data, texts, career, save
 // ============================================================
 
-const GW = 1280, GH = 720;
+const GH = 720, UW = 1280;                   // UW = width of the centered menu layout
+// game width follows the screen's aspect ratio (landscape), so wide phones are filled edge to edge
+const GW = (() => {
+  try {
+    const w = window.innerWidth || UW, h = window.innerHeight || GH, a = Math.max(w, h) / Math.max(1, Math.min(w, h));
+    return Math.round(Math.min(1800, Math.max(UW, GH * a)) / 2) * 2;
+  } catch (e) { return UW; }
+})();
+const MX = (GW - UW) / 2;                    // menus scroll by -MX to stay centered
+const MOBILE_UI = (() => { try { return window.matchMedia('(pointer: coarse)').matches || Math.min(innerWidth, innerHeight) < 520; } catch (e) { return false; } })();
 const FONT = '"Arial Black", "Segoe UI Black", Impact, sans-serif';
 const FONT_B = '"Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
 
@@ -81,7 +90,7 @@ function carStats(carIdx, up, mgLvl, mult = 1) {
     hp: Math.round(c.hp * (1 + 0.25 * up.plating)),
     mass: c.mass,
     shape: c.shape,
-    mgDmg: 1.7 * (1 + 0.45 * mgLvl)
+    mgDmg: 2.55 * (1 + 0.45 * mgLvl)
   };
 }
 
