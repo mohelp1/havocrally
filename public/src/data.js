@@ -29,7 +29,7 @@ const STR = {
     ranking: 'STANDINGS', you: 'You',
     diff: ['EASY', 'MEDIUM', 'HARD', 'FINAL'],
     prize: 'Prize {0}', race: 'RACE!', opponents: 'Rivals:',
-    bossLocked: 'Reach {0} points to challenge the Black Baron for the title!',
+    bossLocked: 'Reach {0} pts to challenge the Black Baron!',
     bossCard: 'Title showdown',
     tip: 'The world burned, the roads stayed. Pick a race below, win, grab scrap money – wrecking rivals pays off. Bolt on armor and challenge the Black Baron!',
     loading: 'Loading track…',
@@ -81,7 +81,7 @@ function carStats(carIdx, up, mgLvl, mult = 1) {
     hp: Math.round(c.hp * (1 + 0.25 * up.plating)),
     mass: c.mass,
     shape: c.shape,
-    mgDmg: 0.85 * (1 + 0.45 * mgLvl)
+    mgDmg: 1.7 * (1 + 0.45 * mgLvl)
   };
 }
 
@@ -89,13 +89,13 @@ function carStats(carIdx, up, mgLvl, mult = 1) {
 const PLAYER_COLOR = 0xd8262e;
 const DRIVERS = [
   { id: 'bara',   name: 'Rust Widow',     color: 0x3fa7ff, skill: 0.32, tier: 0, pts: 2 },
-  { id: 'kudla',  name: 'Shiv',               color: 0xffd23f, skill: 0.38, tier: 0, pts: 4 },
+  { id: 'kudla',  name: 'Shiv',               color: 0xffd23f, skill: 0.38, tier: 0, pts: 4, vis: 4 },
   { id: 'srot',   name: 'Doc Scrap',    color: 0x8fd14f, skill: 0.44, tier: 0, pts: 6 },
   { id: 'vyfuk',  name: 'Gasket', color: 0xff8a3d, skill: 0.5,  tier: 1, pts: 9 },
   { id: 'rada',   name: 'Rusty Rudy',   color: 0xb87a3d, skill: 0.56, tier: 1, pts: 12 },
-  { id: 'mlynek', name: 'Grinder',           color: 0x9b59ff, skill: 0.63, tier: 1, pts: 16 },
+  { id: 'mlynek', name: 'Grinder',           color: 0x9b59ff, skill: 0.63, tier: 1, pts: 16, vis: 4 },
   { id: 'zdena',  name: 'Toothy Tess', color: 0xff4fa3, skill: 0.71, tier: 2, pts: 20 },
-  { id: 'jed',    name: 'Jinx',           color: 0x2de0c0, skill: 0.79, tier: 2, pts: 25 },
+  { id: 'jed',    name: 'Jinx',           color: 0x2de0c0, skill: 0.79, tier: 2, pts: 25, vis: 4 },
   { id: 'hrom',   name: 'Sandstorm',             color: 0xe8e8e8, skill: 0.87, tier: 3, pts: 31 }
 ];
 const BOSS = { id: 'baron', name: 'Black Baron', color: 0x262626, skill: 1.0, tier: 3, pts: 50 };

@@ -4,13 +4,13 @@
 // ============================================================
 
 const CAR_R = 12, CAR_OFF = 10;            // two collision circles per car
-const CAM_ZOOM = 1.0, GUN_Z = 11;
+const CAM_ZOOM = 1.12, GUN_Z = 11;
 const BULLET_SPEED = 1450, BULLET_LIFE = 0.42, FIRE_GAP = 0.085;
 const AMMO_BASE = 140, AMMO_MAX = 220;
 
 // ---------------- particle pool ----------------
 class FX {
-  constructor(scene, cap = 650) { this.s = scene; this.pool = []; this.live = []; this.cap = cap; }
+  constructor(scene, cap = 1200) { this.s = scene; this.pool = []; this.live = []; this.cap = cap; }
   spawn(tex, x, y, o = {}) {
     if (this.live.length >= this.cap) return null;
     let im = this.pool.pop();
@@ -63,7 +63,9 @@ class Car {
     const n = nearest(scene.tr, this.x, this.y);
     this.idx = n.i; this.s = n.s; this.d = n.d; this.side = n.side; this.lapRaw = -1; this.total = this.s - scene.tr.len;
     this.finished = false; this.finishOrder = 0; this.dead = false; this.deadAt = 0; this.kills = 0;
-    this.lastHit = null; this.lastHitT = -99; this.fireCd = 0; this.nitroT = 0; this.mineCd = 0;
+    this.lastHit = null; this.lastHitT = -99; this.fireCd = 0; this.nitroT = 0; this.mineCd = 0; this.flashT = 0; this.shots = 0;
+    const S3 = CAR3[o.stats.shape];
+    this.gunZ = S3.roofGun ? S3.cz + 1.8 : S3.bz1 + 1.6; this.gunX = S3.roofGun ? S3.cabTop[1][0] + 9 : S3.gun[1];
     this.fwd = 0; this.lat = 0; this.offroad = false; this.skidT = 0; this.smokeT = 0;
     // AI state
     this.lane = 0; this.laneTarget = 0; this.laneT = 0; this.stuckT = 0; this.revT = 0; this.burstT = 0; this.wrongT = 0;
@@ -77,6 +79,7 @@ class Car {
   sync() {
     const fr = carFrame(this.a);
     this.spr.setFrame(fr.name).setPosition(this.x, this.y).setRotation(fr.rest).setDepth(10 + this.y * 1e-4);
+    this.spr.setTint(this.dead ? 0x3a3a3a : this.flashT > 0 ? 0xff9a7a : 0xffffff);
     this.sh.setPosition(this.x + 5, this.y + 5).setRotation(this.a);
     if (this.cone) this.cone.setPosition(this.x + Math.cos(this.a) * 18, this.y + Math.sin(this.a) * 18).setRotation(this.a).setVisible(!this.dead);
   }
@@ -108,7 +111,7 @@ class RaceScene extends Phaser.Scene {
 
     this.makeCars();
     for (let k = 0; k < 7; k++) this.spawnPickup(true);
-    pruneCarSheets(this, this.cars.map(c => c.spr.texture.key).concat(G.career ? [`car3_${CARS[G.career.car].shape}_${PLAYER_COLOR.toString(16)}`] : []));
+    if (!this.demo) pruneCarSheets(this, this.cars.map(c => c.spr.texture.key).concat(G.career ? [`car3_${CARS[G.career.car].shape}_${PLAYER_COLOR.toString(16)}`] : []));
 
     const cam = this.cameras.main;
     cam.setZoom(CAM_ZOOM, CAM_ZOOM * VIEW_IY);          // tilted 2.5D view
@@ -152,6 +155,7 @@ class RaceScene extends Phaser.Scene {
       const tier = Math.min(3, cap, dd ? dd.tier : def.tier), sk = def.skill;
       const lvl = Math.min(3, Math.floor(sk * 2.6 + d * 0.35));
       const stats = carStats(tier, { engine: lvl, tires: lvl, plating: Math.min(3, Math.floor(sk * 2.4)) }, Math.floor(sk * 2.5), 0.86 + sk * 0.12 + (d === 3 ? 0.04 : 0));
+      if (def.vis !== undefined) stats.shape = def.vis;
       return { id, name: def.name, color: def.color, stats, skill: sk, aggr: 0.3 + sk * 0.6, hp: stats.hp, ammo: 90 + Math.round(sk * 80), mines: sk > 0.6 ? 2 : 1, nitro: 1 + Math.round(sk * 2), invuln: this.demo };
     });
     if (!this.demo) {
@@ -230,6 +234,7 @@ class RaceScene extends Phaser.Scene {
     const st = car.st, ca = Math.cos(car.a), sa = Math.sin(car.a);
     let vf = car.vx * ca + car.vy * sa, vl = -car.vx * sa + car.vy * ca;
     car.thr = ctl.thr;
+    if (car.flashT > 0) car.flashT -= dt;
     if (car.nitroT > 0) car.nitroT -= dt;
     const nitro = car.nitroT > 0;
     const off = car.offroad;
@@ -466,10 +471,20 @@ class RaceScene extends Phaser.Scene {
     if (ctl.fire && car.ammo > 0 && car.fireCd <= 0) {
       car.fireCd = FIRE_GAP; car.ammo--;
       const spread = car.isPlayer ? 0.035 : 0.035 + (1 - car.skill) * 0.07;
-      const a = car.a + rnd(-spread, spread), gx = car.x + ca * 26, gy = car.y + sa * 26;
-      this.bullets.push({ x: gx, y: gy, px: gx, py: gy, vx: Math.cos(a) * BULLET_SPEED + car.vx, vy: Math.sin(a) * BULLET_SPEED + car.vy, life: BULLET_LIFE, owner: car, dmg: car.st.mgDmg });
-      this.fx.spawn('soft', gx, gy - GUN_Z * VIEW_K, { tint: 0xffd36a, add: true, life: 0.06, s0: 0.45, s1: 0.2, a0: 1, depth: 13 });
-      this.sfx('gun', car, car.isPlayer ? 0.8 : 0.6);
+      const a = car.a + rnd(-spread, spread), gx = car.x + ca * (car.gunX + 1), gy = car.y + sa * (car.gunX + 1);
+      const hz = car.gunZ * VIEW_K, my = gy - hz;
+      this.bullets.push({ x: gx, y: gy, px: gx, py: gy, vx: Math.cos(a) * BULLET_SPEED + car.vx, vy: Math.sin(a) * BULLET_SPEED + car.vy, life: BULLET_LIFE, owner: car, dmg: car.st.mgDmg, hz, tr: car.shots % 2 === 0 });
+      car.shots++;
+      // muzzle flash: glow + star + flame tongue
+      this.fx.spawn('soft', gx, my, { tint: 0xffe08a, add: true, life: 0.07, s0: 0.85, s1: 0.3, a0: 1, depth: 13 });
+      this.fx.spawn('spark', gx + ca * 8, my + sa * 8, { tint: 0xfff2c0, add: true, life: 0.05, s0: 0.9, s1: 0.6, sx: 1.8, rot: car.a, a0: 1, depth: 13 });
+      this.fx.spawn('spark', gx, my, { tint: 0xffa040, add: true, life: 0.05, s0: 0.5, s1: 0.3, sx: 1.2, rot: car.a + Math.PI / 2 * (car.shots % 2 ? 1 : -1) * 0.6, a0: 0.9, depth: 13 });
+      if (car.shots % 3 === 0) this.fx.spawn('smoke', gx, my, { tint: 0x8a8278, life: 0.5, s0: 0.12, s1: 0.45, a0: 0.35, vx: car.vx * 0.6 + ca * 40, vy: car.vy * 0.6 + sa * 40 - 20, depth: 13 });
+      // ejected brass casing
+      const ex = car.x + ca * (car.gunX - 8), ey = car.y + sa * (car.gunX - 8) - hz, side = rnd(150, 230);
+      this.fx.spawn('px', ex, ey, { tint: 0xe0b44a, life: 0.45, s0: 0.75, s1: 0.6, sx: 1.8, a0: 1, a1: 0.6, vx: car.vx * 0.85 - sa * side, vy: car.vy * 0.85 + ca * side - 60, drag: 4, vr: rnd(-25, 25), depth: 12 });
+      if (car.isPlayer && car.shots % 4 === 0) this.cameras.main.shake(70, 0.0016);
+      this.sfx('gun', car, car.isPlayer ? 0.85 : 0.6);
     }
     if (ctl.mine && car.mines > 0) {
       car.mines--;
@@ -493,27 +508,44 @@ class RaceScene extends Phaser.Scene {
       for (const c of this.cars) {
         if (c === b.owner) continue;
         if (Math.abs(c.x - b.x) > 50 || Math.abs(c.y - b.y) > 50) continue;
-        // distance from car center to bullet segment
         const sx = b.x - b.px, sy = b.y - b.py, l2 = sx * sx + sy * sy || 1;
         const u = clamp(((c.x - b.px) * sx + (c.y - b.py) * sy) / l2, 0, 1);
         const qx = b.px + sx * u, qy = b.py + sy * u;
-        // ellipse-ish test in car space
         const ca = Math.cos(c.a), sa = Math.sin(c.a), rx = qx - c.x, ry = qy - c.y;
         const lx = rx * ca + ry * sa, ly = -rx * sa + ry * ca;
         if ((lx * lx) / (24 * 24) + (ly * ly) / (13 * 13) < 1) { hit = { c, x: qx, y: qy }; break; }
       }
       if (hit) {
         if (!hit.c.dead && !hit.c.invuln) this.damage(hit.c, b.dmg, b.owner);
-        hit.c.vx += b.vx * 0.004; hit.c.vy += b.vy * 0.004;
-        this.sparks(hit.x, hit.y, Math.atan2(-b.vy, -b.vx), 3);
-        this.sfx('hit', hit.c, 0.7);
+        hit.c.vx += b.vx * 0.006; hit.c.vy += b.vy * 0.006;
+        this.bulletImpact(hit.x, hit.y - 8 * VIEW_K, Math.atan2(-b.vy, -b.vx), true);
+        this.sfx('hit', hit.c, 0.8);
         B[i] = B[B.length - 1]; B.pop(); continue;
       }
-      if (b.life <= 0) { B[i] = B[B.length - 1]; B.pop(); continue; }
-      g.lineStyle(2.2, 0xffe08a, Math.min(1, b.life * 5));
-      const hz = GUN_Z * VIEW_K;
-      g.lineBetween(b.x - b.vx * 0.022, b.y - b.vy * 0.022 - hz, b.x, b.y - hz);
+      if (b.life <= 0) {
+        const n = nearest(this.tr, b.x, b.y);
+        if (n.d > WALL - 4) { this.bulletImpact(b.x, b.y - 6 * VIEW_K, Math.atan2(-b.vy, -b.vx), false); if (Math.random() < 0.25) this.sfx('ricochet', b, 0.5); }
+        else this.fx.spawn('smoke', b.x, b.y, { tint: this.dustCol, life: 0.5, s0: 0.12, s1: 0.4, a0: 0.5, vy: -20, depth: 9 });
+        B[i] = B[B.length - 1]; B.pop(); continue;
+      }
+      // glowing tracer (every other round), plain streak otherwise
+      const al = Math.min(1, b.life * 5), x0 = b.x - b.vx * 0.03, y0 = b.y - b.vy * 0.03 - b.hz, y1 = b.y - b.hz;
+      if (b.tr) {
+        g.lineStyle(7, 0xff8a20, 0.22 * al); g.lineBetween(x0, y0, b.x, y1);
+        g.lineStyle(3.2, 0xffd060, 0.75 * al); g.lineBetween(x0, y0, b.x, y1);
+        g.lineStyle(1.4, 0xffffff, al); g.lineBetween(b.x - b.vx * 0.014, b.y - b.vy * 0.014 - b.hz, b.x, y1);
+      } else { g.lineStyle(1.6, 0xffe9a0, 0.55 * al); g.lineBetween(b.x - b.vx * 0.018, b.y - b.vy * 0.018 - b.hz, b.x, y1); }
     }
+  }
+
+  bulletImpact(x, y, dir, onCar) {
+    this.fx.spawn('soft', x, y, { tint: onCar ? 0xfff0c0 : 0xffd080, add: true, life: 0.08, s0: onCar ? 0.75 : 0.5, s1: 0.2, a0: 1, depth: 24 });
+    this.sparks(x, y, dir, onCar ? 7 : 4);
+    for (let k = 0; k < (onCar ? 2 : 1); k++) {
+      const a = dir + rnd(-1.2, 1.2), v = rnd(60, 160);
+      this.fx.spawn('px', x, y, { tint: onCar ? 0x2a2622 : 0x6a5a4a, life: rnd(0.3, 0.5), s0: rnd(0.5, 0.9), s1: 0.4, a0: 1, a1: 0.8, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 40, drag: 3, vr: rnd(-20, 20), depth: 21 });
+    }
+    this.fx.spawn('smoke', x, y, { tint: onCar ? 0x3a3530 : this.dustCol, life: 0.45, s0: 0.12, s1: 0.45, a0: 0.45, vy: -18, depth: 21 });
   }
 
   updateMines(dt) {
@@ -549,12 +581,13 @@ class RaceScene extends Phaser.Scene {
     car.hp -= amount;
     if (src && src !== car) { car.lastHit = src; car.lastHitT = this.raceT; }
     if (car.isPlayer) this.events.emit('hurt', amount);
+    car.flashT = 0.07;
     if (car.hp <= 0) this.destroyCar(car);
   }
 
   destroyCar(car) {
     car.hp = 0; car.dead = true; car.deadAt = ++this.deaths; car.raceDeadFire = this.raceT + 5;
-    car.spr.setTint(0x3a3a3a);
+
     this.explosion(car.x, car.y, 1.4);
     const killer = car.lastHit && this.raceT - car.lastHitT < 5 ? car.lastHit : null;
     if (killer && !killer.dead) {
@@ -601,13 +634,14 @@ class RaceScene extends Phaser.Scene {
   updateFires(dt) {
     this.fireT -= dt;
     if (this.fireT > 0 || !this.tr.fires.length) return;
-    this.fireT = 0.045;
+    this.fireT = 0.055;
     const v = this.cameras.main.worldView;
     for (const f of this.tr.fires) {
       if (f.x < v.x - 80 || f.x > v.right + 80 || f.y < v.y - 40 || f.y > v.bottom + 140) continue;
       const fy = f.y - f.z * VIEW_K;
       this.fx.spawn('soft', f.x + rnd(-3, 3) * f.s, fy, { tint: pick([0xffd040, 0xff8a1a, 0xff5a10]), add: true, life: rnd(0.35, 0.6), s0: 0.34 * f.s, s1: 0.06, a0: 0.9, vx: rnd(-8, 8), vy: -rnd(40, 70), depth: 9.8 });
-      if (Math.random() < 0.18) this.fx.spawn('smoke', f.x, fy - 10, { tint: 0x221d18, life: 1.8, s0: 0.25 * f.s, s1: 1.1 * f.s, a0: 0.3, vx: rnd(5, 18), vy: -rnd(25, 40), depth: 21 });
+      if (f.big && Math.random() < 0.5) this.fx.spawn('soft', f.x + rnd(-6, 6), fy - rnd(0, 8), { tint: pick([0xff7a1a, 0xff4a10]), add: true, life: rnd(0.4, 0.7), s0: 0.5 * f.s, s1: 0.1, a0: 0.8, vx: rnd(-10, 10), vy: -rnd(50, 90), depth: 9.8 });
+      if (Math.random() < (f.big ? 0.4 : 0.15)) this.fx.spawn('smoke', f.x + rnd(-4, 4), fy - 12, { tint: f.big ? 0x141210 : 0x221d18, life: f.big ? 2.8 : 1.8, s0: 0.3 * f.s, s1: (f.big ? 1.9 : 1.1) * f.s, a0: f.big ? 0.5 : 0.3, vx: rnd(10, 26), vy: -rnd(28, 45), vr: rnd(-0.5, 0.5), depth: 21 });
     }
   }
 

@@ -96,11 +96,14 @@ const Sound = {
   play(name, v = 1) {
     if (!this.ctx || v <= 0.03) return;
     const now = performance.now();
-    const gap = name === 'gun' ? 60 : 40;
+    const gap = name === 'gun' ? 55 : name === 'ricochet' ? 120 : 40;
     if (this.last[name] && now - this.last[name] < gap) return;
     this.last[name] = now;
     switch (name) {
-      case 'gun': this.noise(0.07, 2400, 'bandpass', 0.35 * v, 1.2); this.tone(180, 60, 0.05, 'square', 0.08 * v); break;
+      case 'gun':
+        this.noise(0.07, 2400, 'bandpass', 0.32 * v, 1.2); this.noise(0.09, 600, 'lowpass', 0.45 * v);
+        this.tone(170, 55, 0.06, 'square', 0.1 * v); this.tone(2600, 1400, 0.02, 'square', 0.03 * v); break;
+      case 'ricochet': this.tone(2800 + Math.random() * 1200, 700, 0.18, 'sine', 0.12 * v); break;
       case 'hit': this.noise(0.05, 3800, 'highpass', 0.22 * v); this.tone(900, 400, 0.04, 'square', 0.04 * v); break;
       case 'thud': this.noise(0.18, 300, 'lowpass', 0.6 * v); this.tone(90, 40, 0.15, 'sine', 0.35 * v); break;
       case 'crash': this.noise(0.25, 900, 'bandpass', 0.55 * v, 0.7); this.tone(120, 50, 0.2, 'sawtooth', 0.15 * v); break;
