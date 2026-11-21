@@ -43,11 +43,11 @@ class FX {
 // skid marks: ring buffer of fading images
 class Skids {
   constructor(scene, cap = 520) { this.s = scene; this.cap = cap; this.items = []; this.head = 0; }
-  add(x, y, a, alpha) {
+  add(x, y, a, alpha, tint = 0xffffff) {
     let im;
     if (this.items.length < this.cap) { im = this.s.add.image(x, y, 'skid').setDepth(1); this.items.push(im); }
     else { im = this.items[this.head]; this.head = (this.head + 1) % this.cap; im.setPosition(x, y); }
-    im.setRotation(a).setAlpha(alpha).setScale(1.3, 1.1).setVisible(true); im._a = alpha;
+    im.setRotation(a).setAlpha(alpha).setScale(1.3, 1.1).setTint(tint).setVisible(true); im._a = alpha;
   }
   update(dt) { for (const im of this.items) if (im._a > 0) { im._a -= dt * 0.09; im.setAlpha(Math.max(0, im._a)); if (im._a <= 0) im.setVisible(false); } }
 }
@@ -69,17 +69,23 @@ class Car {
     this.fwd = 0; this.lat = 0; this.offroad = false; this.skidT = 0; this.smokeT = 0;
     // AI state
     this.lane = 0; this.laneTarget = 0; this.laneT = 0; this.stuckT = 0; this.revT = 0; this.burstT = 0; this.wrongT = 0;
-    const tex = renderCarSheet(scene, o.stats.shape, o.color, o.kit);
+    const tex = renderCarSheet(scene, o.stats.shape, o.color, o.kit, scene.demo);   // demo race: quick untextured sheets
     this.sh = scene.add.image(this.x + 4, this.y + 6, carShadowTexture(scene, o.stats.shape)).setScale(1.08 / CAR_RES).setAlpha(0.45).setDepth(8);
-    this.spr = scene.add.image(this.x, this.y, tex, 'f0').setOrigin(0.5, CAR_OY).setScale(1 / CAR_RES3).setDepth(10);
+    this.sheet = tex; this.fname = 'f0';
+    this.spr = scene.add.image(this.x, this.y, tex + '_f0').setOrigin(0.5, CAR_OY).setScale(1 / CAR_RES3).setDepth(10);
     if (scene.tr.theme.lamps) this.cone = scene.add.image(this.x, this.y, 'cone').setOrigin(0, 0.5).setScale(1.1, 0.9).setAlpha(0.42).setBlendMode(Phaser.BlendModes.ADD).setDepth(11);
     if (this.isPlayer) this.marker = scene.add.image(this.x, this.y, 'soft').setTint(0xffe14a).setAlpha(0).setDepth(7);
+    this.brk = scene.add.image(this.x, this.y, 'soft').setTint(0xff2a10).setBlendMode(Phaser.BlendModes.ADD).setScale(0.55, 0.32).setAlpha(0);
     this.sync();
   }
   sync() {
     const fr = carFrame(this.a);
-    this.spr.setFrame(fr.name).setPosition(this.x, this.y).setRotation(fr.rest).setDepth(10 + this.y * 1e-4);
-    this.spr.setTint(this.dead ? 0x3a3a3a : this.flashT > 0 ? 0xff9a7a : 0xffffff).setAlpha(this.finished && !this.scene.demo ? 0.6 : 1);
+    if (fr.name !== this.fname) { this.fname = fr.name; this.spr.setTexture(this.sheet + '_' + fr.name); }
+    this.spr.setPosition(this.x, this.y).setRotation(fr.rest).setDepth(10 + this.y * 1e-4);
+    const hpf = this.hp / this.maxHp;
+    this.spr.setTint(this.dead ? 0x3a3a3a : this.flashT > 0 ? 0xff9a7a : hpf < 0.3 ? 0xb8a494 : 0xffffff).setAlpha(this.finished && !this.scene.demo ? 0.6 : 1);
+    const braking = !this.dead && this.thr < 0 && this.fwd > 30;
+    this.brk.setPosition(this.x - Math.cos(this.a) * 22, this.y - Math.sin(this.a) * 22 - 7 * VIEW_K).setRotation(this.a + Math.PI / 2).setDepth(this.spr.depth + 0.00005).setAlpha(braking ? 0.95 : 0);
     this.sh.setPosition(this.x + 5, this.y + 5).setRotation(this.a);
     if (this.cone) this.cone.setPosition(this.x + Math.cos(this.a) * 18, this.y + Math.sin(this.a) * 18).setRotation(this.a).setVisible(!this.dead);
   }
@@ -111,10 +117,15 @@ class RaceScene extends Phaser.Scene {
 
     this.makeCars();
     for (let k = 0; k < 7; k++) this.spawnPickup(true);
-    if (!this.demo) pruneCarSheets(this, this.cars.map(c => c.spr.texture.key).concat(G.career ? [carSheetKey(CARS[G.career.car].shape, PLAYER_COLOR)] : []));
+    if (!this.demo) pruneCarSheets(this, this.cars.map(c => c.sheet).concat(G.career ? [carSheetKey(CARS[G.career.car].shape, PLAYER_COLOR)] : []));
 
     const cam = this.cameras.main;
     cam.setZoom(CAM_ZOOM, CAM_ZOOM * VIEW_IY);          // tilted 2.5D view
+    this.zoomNow = CAM_ZOOM;
+    if (!LOW_MEM) try {                                  // gritty color grade (one cheap full-screen pass)
+      const cm = cam.filters.external.addColorMatrix();
+      cm.colorMatrix.saturate(0.12); cm.colorMatrix.contrast(0.1, true);
+    } catch (e) { /* filters not available */ }
     cam.setBounds(0, 0, this.tr.W, this.tr.H);
     const f = this.player || this.cars[0];
     this.camX = f.x; this.camY = f.y; cam.centerOn(this.camX, this.camY);
@@ -276,6 +287,7 @@ class RaceScene extends Phaser.Scene {
     car.smokeT -= dt;
     if (car.smokeT <= 0) {
       car.smokeT = 0.05;
+      if (off && spd > 60 && !car.dead) for (const sd of [-1, 1]) this.skids.add(car.x - ca2 * 13 - sa2 * 9 * sd, car.y - sa2 * 13 + ca2 * 9 * sd, car.a, 0.3, 0x8a6040);
       if (off && spd > 70) {
         const dust = this.dustCol;
         this.fx.spawn('smoke', car.x - ca2 * 18 + rnd(-6, 6), car.y - sa2 * 18 + rnd(-6, 6), { tint: dust, life: 0.9, s0: 0.35, s1: 1.1, a0: 0.55, vx: -car.vx * 0.1 + rnd(-15, 15), vy: -car.vy * 0.1 + rnd(-15, 15), depth: 9 });
@@ -480,6 +492,7 @@ class RaceScene extends Phaser.Scene {
       this.fx.spawn('soft', gx, my, { tint: 0xffe08a, add: true, life: 0.07, s0: 0.85, s1: 0.3, a0: 1, depth: 13 });
       this.fx.spawn('spark', gx + ca * 8, my + sa * 8, { tint: 0xfff2c0, add: true, life: 0.05, s0: 0.9, s1: 0.6, sx: 1.8, rot: car.a, a0: 1, depth: 13 });
       this.fx.spawn('spark', gx, my, { tint: 0xffa040, add: true, life: 0.05, s0: 0.5, s1: 0.3, sx: 1.2, rot: car.a + Math.PI / 2 * (car.shots % 2 ? 1 : -1) * 0.6, a0: 0.9, depth: 13 });
+      this.fx.spawn('soft', gx + ca * 12, gy + sa * 12, { tint: 0xffa040, add: true, life: 0.07, s0: 2.2, s1: 1.6, a0: 0.26, depth: 2 });
       if (car.shots % 3 === 0) this.fx.spawn('smoke', gx, my, { tint: 0x8a8278, life: 0.5, s0: 0.12, s1: 0.45, a0: 0.35, vx: car.vx * 0.6 + ca * 40, vy: car.vy * 0.6 + sa * 40 - 20, depth: 13 });
       // ejected brass casing
       const ex = car.x + ca * (car.gunX - 8), ey = car.y + sa * (car.gunX - 8) - hz, side = rnd(150, 230);
@@ -696,6 +709,11 @@ class RaceScene extends Phaser.Scene {
       f = this.camTarget;
     }
     if (!f) return;
+    if (!this.demo) {
+      const sr = clamp(Math.hypot(f.vx, f.vy) / f.st.speed, 0, 1.4), zt = CAM_ZOOM * (1 - 0.07 * sr - (f.nitroT > 0 ? 0.05 : 0));
+      this.zoomNow = (this.zoomNow || CAM_ZOOM) + (zt - (this.zoomNow || CAM_ZOOM)) * (1 - Math.exp(-2.2 * dt));
+      this.cameras.main.setZoom(this.zoomNow, this.zoomNow * VIEW_IY);
+    }
     const tx = f.x + f.vx * 0.36, ty = f.y + f.vy * 0.36;
     const k = 1 - Math.exp(-(this.demo ? 2 : 5) * dt);
     this.camX += (tx - this.camX) * k; this.camY += (ty - this.camY) * k;
@@ -810,6 +828,7 @@ class HudScene extends Phaser.Scene {
     this.add.image(GW / 2, GH / 2, 'vignette').setDisplaySize(GW, GH).setDepth(-3);
     this.add.rectangle(GW / 2, GH / 2, GW, GH, haze === 'ash' ? 0x5a4c44 : haze === 'toxic' ? 0x7aa030 : haze === 'ember' ? 0xff6a20 : 0xd89a58, haze === 'ember' ? 0.05 : 0.07).setDepth(-3);
     this.amb = { type: haze, g: this.add.graphics().setDepth(-2), p: [] };
+    this.speedG = this.add.graphics().setDepth(-1).setBlendMode(Phaser.BlendModes.ADD);
     if (haze === 'ember') this.amb.g.setBlendMode(Phaser.BlendModes.ADD);
     for (let k = 0; k < (haze === 'sand' ? 46 : 60); k++) this.amb.p.push({ x: rnd(0, GW), y: rnd(0, GH), v: rnd(0.6, 1.4), l: rnd(18, 60), a: rnd(0.08, 0.28), ph: rnd(0, 7) });
     // touch controls
@@ -936,6 +955,12 @@ class HudScene extends Phaser.Scene {
     });
     this.wrongT.setVisible(p.wrongT > 1 && !p.dead && Math.floor(r.raceT * 3) % 2 === 0);
     this.updateAmbience();
+    const sg = this.speedG; sg.clear();
+    if (p.nitroT > 0 && !r.paused) for (let k = 0; k < 22; k++) {
+      const a = Math.random() * Math.PI * 2, r0 = 260 + Math.random() * 260, l = 60 + Math.random() * 140;
+      sg.lineStyle(2, 0xfff0d0, 0.08 + Math.random() * 0.14);
+      sg.lineBetween(GW / 2 + Math.cos(a) * r0, GH / 2 + Math.sin(a) * r0 * 0.6, GW / 2 + Math.cos(a) * (r0 + l), GH / 2 + Math.sin(a) * (r0 + l) * 0.6);
+    }
     this.updateTouch();
   }
 }
