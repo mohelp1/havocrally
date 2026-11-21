@@ -103,8 +103,9 @@ class TitleScene extends Phaser.Scene {
     drawChain(cg, 95, -10, 120, 52, 0); drawChain(cg, 505, -10, 480, 52, 0);
     rustPlate(this, 50, 48, 500, 285, { spikes: true, spikesBottom: true, alpha: 0.85, dim: 0.25 });
     const hook = this.add.graphics(); rivet(hook, 120, 58, 5); rivet(hook, 480, 58, 5);
-    burningWreck(this, 1150, 615, 3, 2.7, 2.5, 5);
-    burningWreck(this, 1200, 455, 4, 2.1, -2.2, 4);
+    this.add.image(1110, 618, 'bonepile').setScale(1.05).setDepth(5);
+    this.add.image(1225, 470, 'skullpike').setScale(0.95).setDepth(4).setAngle(4);
+    this.add.image(1215, 300, 'bonepile').setScale(0.5).setDepth(4).setFlipX(true);
     startConvoy(this, 642, 1.9, -0.5);
     const logo1 = this.add.text(80, 120, 'HAVOC', { fontFamily: FONT, fontSize: '124px', color: '#ffb52a', stroke: '#2a0a00', strokeThickness: 12, resolution: 2 }).setOrigin(0, 0.5).setShadow(6, 8, '#000', 6, true, true);
     const logo2 = this.add.text(92, 225, 'RALLY', { fontFamily: FONT, fontSize: '92px', color: '#ffffff', stroke: '#8a1010', strokeThickness: 10, resolution: 2 }).setOrigin(0, 0.5).setShadow(6, 8, '#000', 6, true, true);

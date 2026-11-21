@@ -4,7 +4,89 @@
 //  burning-wreck backdrop, fire & ember ambience, buggy convoy
 // ============================================================
 
+// ---------------- bones (canvas drawing) ----------------
+function boneFill(g, x0, y0, x1, y1) {
+  const gr = g.createLinearGradient(x0, y0, x1, y1);
+  gr.addColorStop(0, '#f4ead2'); gr.addColorStop(0.55, '#cdbd98'); gr.addColorStop(1, '#8a7a5a');
+  return gr;
+}
+function drawFemur(g, x0, y0, x1, y1, w) {
+  const a = Math.atan2(y1 - y0, x1 - x0), l = Math.hypot(x1 - x0, y1 - y0);
+  g.save(); g.translate(x0, y0); g.rotate(a);
+  g.beginPath(); g.rect(0, -w * 0.32, l, w * 0.64);
+  for (const ex of [0, l]) for (const ey of [-w * 0.42, w * 0.42]) { g.moveTo(ex + w * 0.6, ey); g.arc(ex, ey, w * 0.6, 0, Math.PI * 2); }
+  g.fillStyle = boneFill(g, 0, -w, 0, w); g.fill('nonzero');
+  g.strokeStyle = 'rgba(40,28,16,0.7)'; g.lineWidth = 1.4; g.stroke();
+  g.restore();
+}
+function drawHornedSkull(g, x, y, s, rot = 0) {
+  g.save(); g.translate(x, y); g.rotate(rot); g.scale(s, s);
+  // horns
+  for (const sd of [-1, 1]) {
+    g.beginPath(); g.moveTo(sd * 12, -16); g.quadraticCurveTo(sd * 44, -14, sd * 52, -46); g.quadraticCurveTo(sd * 38, -22, sd * 10, -8); g.closePath();
+    const hg = g.createLinearGradient(sd * 10, -10, sd * 52, -46); hg.addColorStop(0, '#d8c8a2'); hg.addColorStop(0.7, '#9a8662'); hg.addColorStop(1, '#3a2e20');
+    g.fillStyle = hg; g.fill(); g.strokeStyle = 'rgba(40,28,16,0.75)'; g.lineWidth = 1.3; g.stroke();
+    for (let k = 1; k < 5; k++) { g.beginPath(); g.moveTo(sd * (14 + k * 7), -15 - k * 3); g.lineTo(sd * (12 + k * 7), -10 - k * 4); g.strokeStyle = 'rgba(60,40,20,0.35)'; g.stroke(); }
+  }
+  // skull
+  g.beginPath(); g.moveTo(-17, -14); g.quadraticCurveTo(0, -26, 17, -14); g.lineTo(13, 8); g.quadraticCurveTo(9, 30, 0, 34); g.quadraticCurveTo(-9, 30, -13, 8); g.closePath();
+  g.fillStyle = boneFill(g, -17, -20, 17, 34); g.fill(); g.strokeStyle = 'rgba(40,28,16,0.8)'; g.lineWidth = 1.5; g.stroke();
+  g.fillStyle = '#1a120a';
+  for (const sd of [-1, 1]) { g.beginPath(); g.ellipse(sd * 8, -4, 5, 6.5, sd * 0.3, 0, Math.PI * 2); g.fill(); g.beginPath(); g.ellipse(sd * 3, 25, 1.8, 3, 0, 0, Math.PI * 2); g.fill(); }
+  g.strokeStyle = 'rgba(40,28,16,0.5)'; g.lineWidth = 1;
+  g.beginPath(); g.moveTo(-2, -18); g.lineTo(2, -9); g.lineTo(-1, -2); g.moveTo(9, 6); g.lineTo(5, 14); g.stroke();
+  g.restore();
+}
+function drawHumanSkull(g, x, y, s, rot = 0) {
+  g.save(); g.translate(x, y); g.rotate(rot); g.scale(s, s);
+  g.beginPath(); g.arc(0, -4, 14, Math.PI * 0.85, Math.PI * 2.15); g.lineTo(9, 12); g.lineTo(-9, 12); g.closePath();
+  g.fillStyle = boneFill(g, -14, -18, 14, 12); g.fill(); g.strokeStyle = 'rgba(40,28,16,0.8)'; g.lineWidth = 1.4; g.stroke();
+  g.fillStyle = '#1a120a';
+  for (const sd of [-1, 1]) { g.beginPath(); g.ellipse(sd * 5.5, -1, 4, 4.6, 0, 0, Math.PI * 2); g.fill(); }
+  g.beginPath(); g.moveTo(0, 4); g.lineTo(-2, 8); g.lineTo(2, 8); g.closePath(); g.fill();
+  g.strokeStyle = 'rgba(30,20,10,0.8)'; g.lineWidth = 1; for (let k = -2; k <= 2; k++) { g.beginPath(); g.moveTo(k * 2.6, 10); g.lineTo(k * 2.6, 13.5); g.stroke(); }
+  g.restore();
+}
+function drawRibcage(g, x, y, s, rot = 0) {
+  g.save(); g.translate(x, y); g.rotate(rot); g.scale(s, s);
+  g.strokeStyle = '#3a2a18'; g.lineWidth = 7; g.lineCap = 'round';
+  g.beginPath(); g.moveTo(-46, 0); g.lineTo(46, 0); g.stroke();
+  g.strokeStyle = '#d8c8a2'; g.lineWidth = 5; g.stroke();
+  for (let k = 0; k < 7; k++) {
+    const rx = -34 + k * 11, rr = 26 - Math.abs(k - 3) * 3;
+    for (const sd of [-1, 1]) {
+      g.beginPath(); g.moveTo(rx, 0); g.quadraticCurveTo(rx + 10, sd * rr * 1.2, rx - 6, sd * rr);
+      g.strokeStyle = 'rgba(40,28,16,0.7)'; g.lineWidth = 4.6; g.stroke();
+      g.strokeStyle = k % 2 ? '#cdbd98' : '#e6d8b8'; g.lineWidth = 3; g.stroke();
+    }
+  }
+  for (let k = 0; k < 9; k++) circ(g, -40 + k * 10, 0, 2.6, '#f0e4c8');
+  g.restore();
+}
+// a heap of bones: ribcage, crossed femurs, horned skull, small skulls
+function drawBonePile(g, x, y, s, seed = 1) {
+  const rng = mulberry(seed);
+  g.save(); g.translate(x, y); g.scale(s, s);
+  const sh = g.createRadialGradient(0, 18, 0, 0, 18, 120); sh.addColorStop(0, 'rgba(0,0,0,0.55)'); sh.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = sh; g.beginPath(); g.ellipse(0, 18, 120, 34, 0, 0, Math.PI * 2); g.fill();
+  drawRibcage(g, 34, -6, 0.9, -0.25);
+  for (let k = 0; k < 5; k++) { const a = rng() * Math.PI, cx = (rng() - 0.5) * 150, cy = 8 + rng() * 16, l = 24 + rng() * 22; drawFemur(g, cx - Math.cos(a) * l / 2, cy - Math.sin(a) * l * 0.3, cx + Math.cos(a) * l / 2, cy + Math.sin(a) * l * 0.3, 6 + rng() * 2); }
+  drawFemur(g, -60, 22, 10, -16, 10); drawFemur(g, -64, -14, 4, 24, 10);
+  drawHumanSkull(g, 78, 10, 1.1, 0.3); drawHumanSkull(g, -92, 16, 0.9, -0.4);
+  drawHornedSkull(g, -18, -12, 1.25, -0.08);
+  g.restore();
+}
+
 function makeMenuTextures(scene) {
+  if (!scene.textures.exists('bonepile')) {
+    const cv = makeCanvas(420, 220), g = cv.getContext('2d');
+    drawBonePile(g, 210, 140, 1.25, 7);
+    scene.textures.addCanvas('bonepile', cv);
+    const cv2 = makeCanvas(160, 200), g2 = cv2.getContext('2d');      // horned skull on a spiked pike
+    g2.fillStyle = '#2a1d12'; g2.fillRect(76, 60, 8, 140); g2.fillStyle = '#4a3420'; g2.fillRect(76, 60, 3, 140);
+    drawHornedSkull(g2, 80, 66, 1.15);
+    scene.textures.addCanvas('skullpike', cv2);
+  }
   if (!scene.textures.exists('rustplate')) {
     const cv = noiseTile(256, '#5c4a3c', '#3a2f27', 6, 333, 20, [['rgba(20,12,8,0.35)', 140, 1], ['rgba(200,180,150,0.15)', 80, 0.8]]);
     const g = cv.getContext('2d'), rng = mulberry(4242);
@@ -78,11 +160,13 @@ function makeMenuTextures(scene) {
     const tires = (x, y, s) => { g.fillStyle = '#0d0704'; for (let r = 0; r < 4; r++) for (let k = 0; k <= 3 - r; k++) { g.beginPath(); g.ellipse(x + (k - (3 - r) / 2) * 16 * s, y - r * 9 * s, 8 * s, 5 * s, 0, 0, 7); g.fill(); } };
     fence(40, 330, HZ + 40, 0.7); fence(840, 1240, HZ + 38, 0.65);
     tires(380, HZ + 44, 0.8); tires(760, HZ + 48, 0.9);
-    [[150, HZ + 52, 0.55], [520, HZ + 46, 0.45], [700, HZ + 40, 0.4], [1060, HZ + 50, 0.5], [1190, HZ + 60, 0.6]].forEach(([x, y, s], i) => wreck(x, y, s, i % 2, true));
-    [[260, HZ + 120, 1.1], [1000, HZ + 150, 1.3]].forEach(([x, y, s], i) => wreck(x, y, s, i % 2, true));
-    wreck(640, HZ + 95, 0.8, true, false);
+    [[150, HZ + 50, 0.3], [520, HZ + 44, 0.25], [1060, HZ + 48, 0.28], [1190, HZ + 58, 0.32]].forEach(([x, y, s], i) => drawBonePile(g, x, y, s, 11 + i));
+    [[260, HZ + 125, 0.75], [1000, HZ + 160, 0.9], [640, HZ + 95, 0.5]].forEach(([x, y, s], i) => drawBonePile(g, x, y, s, 31 + i));
+    for (const [x, y, s] of [[66, HZ + 6, 0.32], [222, HZ + 6, 0.32], [880, HZ + 8, 0.3], [1140, HZ + 8, 0.3]]) drawHornedSkull(g, x, y, s);
+    // warm sunset light over the bones
+    g.globalCompositeOperation = 'multiply'; g.fillStyle = 'rgba(230,150,90,0.55)'; g.fillRect(0, HZ, W, H - HZ); g.globalCompositeOperation = 'source-over';
     scene.textures.addCanvas('menubg', cv);
-    G.menuFires = fires;
+    G.menuFires = fires;          // no fires in the menus any more
   }
 }
 
@@ -160,15 +244,6 @@ function menuBackdrop(scene) {
   scene.add.image(0, 0, 'menubg').setOrigin(0).setDepth(-10);
   scene.add.image(GW / 2, GH / 2, 'vignette').setDisplaySize(GW, GH).setDepth(-9);
   menuAmbience(scene, (G.menuFires || []).map(f => ({ ...f, depth: -6 })));
-}
-// charred car sprite with fires on it
-function burningWreck(scene, x, y, shape, scale, heading, depth = 0) {
-  const im = addCarImage(scene, x, y, shape, 0x4a3a2c, scale, heading).setTint(0x8a7462).setDepth(depth);
-  scene.add.image(x + 6 * scale, y + 2 * scale, 'soft').setTint(0x000000).setAlpha(0.5).setScale(1.6 * scale, 0.6 * scale).setDepth(depth - 0.1);
-  const glow = scene.add.image(x, y - 10 * scale, 'soft').setTint(0xff7a20).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.5).setScale(3 * scale, 2 * scale).setDepth(depth - 0.05);
-  scene.tweens.add({ targets: glow, alpha: 0.25, yoyo: true, repeat: -1, duration: 180, ease: 'Sine.InOut' });
-  if (scene.mfires) scene.mfires.push({ x: x + 4 * scale, y: y - 14 * scale, s: scale * 0.9, depth: depth + 0.2 }, { x: x - 10 * scale, y: y - 10 * scale, s: scale * 0.6, depth: depth + 0.2 });
-  return im;
 }
 // buggies and war cars tearing across the screen, kicking up dust
 function startConvoy(scene, y, scale, depth) {
