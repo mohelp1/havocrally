@@ -248,7 +248,7 @@ function buildDecor(tr) {
   items.sort((a, b) => a.y - b.y);
   tr.decor = items;
   // burning wrecks / tire piles close to the track so they are seen while racing
-  for (let k = 0; k < tr.len / 520; k++) {
+  for (let k = 0; k < tr.len / (MOBILE_UI || LOW_MEM ? 1100 : 520); k++) {   // fewer burning wrecks on phones (each one emits particles)
     const i = Math.floor(rng() * tr.N), side = rng() < 0.5 ? -1 : 1, dist = WALL + 46 + rng() * 120;
     tryPlace(tr.P[i].x - tr.TY[i] * side * dist, tr.P[i].y + tr.TX[i] * side * dist, rng() < 0.7 ? 'burnwreck' : 'tirefire');
   }

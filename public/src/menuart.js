@@ -199,6 +199,21 @@ function drawChain(g, x0, y0, x1, y1, sag = 0) {
     }
   }
 }
+// chain as a repeating texture on a TileSprite (a Graphics chain is thousands of draw commands per frame)
+function chainTexture(scene) {
+  if (scene.textures.exists('chainlink')) return;
+  const cv = makeCanvas(14, 16), g = cv.getContext('2d');
+  g.lineWidth = 3.4; g.strokeStyle = '#1a1410'; g.beginPath(); g.ellipse(7.5, 5.5, 3.6, 5.6, 0, 0, 7); g.stroke();
+  g.lineWidth = 2.4; g.strokeStyle = '#8a8478'; g.beginPath(); g.ellipse(7, 5, 3.4, 5.4, 0, 0, 7); g.stroke();
+  g.lineWidth = 1; g.strokeStyle = 'rgba(220,210,190,0.8)'; g.beginPath(); g.ellipse(6.4, 4.4, 2.4, 4.2, 0, Math.PI, Math.PI * 1.8); g.stroke();
+  g.fillStyle = '#1a1410'; g.fillRect(5.6, 10, 3.4, 7); g.fillStyle = '#6e685e'; g.fillRect(5.6, 10, 2.4, 6.5);
+  scene.textures.addCanvas('chainlink', cv);
+}
+function chainSprite(scene, x0, y0, x1, y1) {
+  chainTexture(scene);
+  const len = Math.hypot(x1 - x0, y1 - y0);
+  return scene.add.tileSprite((x0 + x1) / 2, (y0 + y1) / 2, 14, len, 'chainlink').setRotation(-Math.atan2(x1 - x0, y1 - y0));
+}
 function rivet(g, x, y, r = 3) { g.fillStyle(0x1a120c, 0.8).fillCircle(x + 1, y + 1, r); g.fillStyle(0x9a8a72, 1).fillCircle(x, y, r); g.fillStyle(0xe0d4bc, 0.8).fillCircle(x - r * 0.35, y - r * 0.35, r * 0.35); }
 
 // rusted metal plate with rivets (and optional spikes on top)
@@ -222,7 +237,7 @@ function rustPlate(scene, x, y, w, h, o = {}) {
 // ---------------- ambience: fire particles, embers, burning wrecks, buggies ----------------
 function menuAmbience(scene, fires = [], embers = true) {
   makeFxTextures(scene);
-  scene.mfx = new FX(scene, 500); scene.mfires = fires.slice(); scene.mT = 0; scene.mEmbers = embers;
+  scene.mfx = new FX(scene, LITE ? 150 : 320); scene.mfires = fires.slice(); scene.mT = 0; scene.mEmbers = embers;
 }
 function menuTick(scene, delta) {
   if (!scene.mfx) return;
@@ -234,7 +249,7 @@ function menuTick(scene, delta) {
       scene.mfx.spawn('soft', f.x + rnd(-5, 5) * f.s, f.y, { tint: pick([0xffd040, 0xff8a1a, 0xff5a10]), add: true, life: rnd(0.35, 0.65), s0: 0.45 * f.s, s1: 0.06, a0: 0.95, vx: rnd(-6, 10), vy: -rnd(45, 85) * f.s, depth: f.depth === undefined ? -5 : f.depth });
       if (Math.random() < 0.35) scene.mfx.spawn('smoke', f.x, f.y - 14 * f.s, { tint: 0x141010, life: 2.4, s0: 0.3 * f.s, s1: 1.6 * f.s, a0: 0.45, vx: rnd(12, 30), vy: -rnd(25, 45), vr: rnd(-0.5, 0.5), depth: (f.depth === undefined ? -5 : f.depth) - 0.1 });
     }
-    if (scene.mEmbers) for (let k = 0; k < 2; k++) scene.mfx.spawn('soft', rnd(0, GW) + scene.cameras.main.scrollX, GH + 10, { tint: pick([0xff8a2a, 0xffb040]), add: true, life: rnd(3, 6), s0: rnd(0.05, 0.11), s1: 0.02, a0: 0.9, vx: rnd(-20, 30), vy: -rnd(60, 140), depth: 60 });
+    if (scene.mEmbers) for (let k = 0; k < (LITE ? (Math.random() < 0.4 ? 1 : 0) : 1); k++) scene.mfx.spawn('soft', rnd(0, GW) + scene.cameras.main.scrollX, GH + 10, { tint: pick([0xff8a2a, 0xffb040]), add: true, life: rnd(3, 6), s0: rnd(0.05, 0.11), s1: 0.02, a0: 0.9, vx: rnd(-20, 30), vy: -rnd(60, 140), depth: 60 });
   }
   scene.mfx.update(dt);
   if (scene.convoy) scene.convoy(dt);
@@ -262,7 +277,7 @@ function startConvoy(scene, y, scale, depth) {
     for (let i = cars.length - 1; i >= 0; i--) {
       const c = cars[i]; c.im.x += c.v * dt; c.ph += dt * 18;
       c.im.y = c.y + Math.sin(c.ph) * 1.2;
-      if (Math.random() < 0.7) scene.mfx.spawn('smoke', c.im.x - 30 * scale, c.y - 4, { tint: 0xb08050, life: 0.9, s0: 0.35 * scale, s1: 1.3 * scale, a0: 0.4, vx: -rnd(20, 60), vy: -rnd(5, 25), depth: depth - 0.5 });
+      if (Math.random() < (LITE ? 0.2 : 0.45)) scene.mfx.spawn('smoke', c.im.x - 30 * scale, c.y - 4, { tint: 0xb08050, life: 0.9, s0: 0.35 * scale, s1: 1.3 * scale, a0: 0.4, vx: -rnd(20, 60), vy: -rnd(5, 25), depth: depth - 0.5 });
       if (Math.random() < 0.15) scene.mfx.spawn('smoke', c.im.x - 30 * scale, c.y - 12 * scale, { tint: 0x1a1410, life: 0.7, s0: 0.12 * scale, s1: 0.5 * scale, a0: 0.5, vx: -40, vy: -30, depth: depth + 0.5 });
       if (c.im.x > GW + 100) { c.im.destroy(); cars.splice(i, 1); }
     }

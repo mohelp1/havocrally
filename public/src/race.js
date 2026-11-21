@@ -4,13 +4,14 @@
 // ============================================================
 
 const CAR_R = 12, CAR_OFF = 10;            // two collision circles per car
+const LITE = MOBILE_UI || LOW_MEM;          // phones: fewer particles/overlays for a smooth frame rate
 const CAM_ZOOM = MOBILE_UI ? 1.3 : 1.12, GUN_Z = 11;   // closer camera on phones
 const BULLET_SPEED = 1450, BULLET_LIFE = 0.42, FIRE_GAP = 0.085;
 const AMMO_BASE = 140, AMMO_MAX = 220;
 
 // ---------------- particle pool ----------------
 class FX {
-  constructor(scene, cap = 1200) { this.s = scene; this.pool = []; this.live = []; this.cap = cap; }
+  constructor(scene, cap = LITE ? 240 : 650) { this.s = scene; this.pool = []; this.live = []; this.cap = cap; }
   spawn(tex, x, y, o = {}) {
     if (this.live.length >= this.cap) return null;
     let im = this.pool.pop();
@@ -42,7 +43,7 @@ class FX {
 
 // skid marks: ring buffer of fading images
 class Skids {
-  constructor(scene, cap = 520) { this.s = scene; this.cap = cap; this.items = []; this.head = 0; }
+  constructor(scene, cap = LITE ? 160 : 360) { this.s = scene; this.cap = cap; this.items = []; this.head = 0; }
   add(x, y, a, alpha) {
     let im;
     if (this.items.length < this.cap) { im = this.s.add.image(x, y, 'skid').setDepth(1); this.items.push(im); }
@@ -269,7 +270,7 @@ class RaceScene extends Phaser.Scene {
     car.skidT -= dt;
     const sliding = Math.abs(vl) > 95 || (ctl.thr < 0 && vf > 120) || (ctl.thr > 0 && vf < 60 && vf > 0 && racing && acc > 0 && car.raceStartBoost);
     if (sliding && car.skidT <= 0 && !off && !car.dead) {
-      car.skidT = 0.028;
+      car.skidT = LITE ? 0.06 : 0.04;
       for (const sd of [-1, 1]) this.skids.add(car.x - ca2 * 13 - sa2 * 9 * sd, car.y - sa2 * 13 + ca2 * 9 * sd, car.a, 0.42);
       if (car.isPlayer && Math.abs(vl) > 140) Sound.play('skid', 0.6);
     }
@@ -290,8 +291,8 @@ class RaceScene extends Phaser.Scene {
     if (!car.dead) {
       // exhaust: dark puffs on throttle, road dust on sandy tracks, backfire when lifting off at speed
       const ex = car.x - ca2 * 25, ey = car.y - sa2 * 25 - 4 * VIEW_K;
-      if (ctl.thr > 0 && Math.random() < 0.3) this.fx.spawn('smoke', ex, ey, { tint: 0x2a2622, life: 0.7, s0: 0.16, s1: 0.5, a0: 0.42, vx: -ca2 * 40 + rnd(-10, 10), vy: -sa2 * 40 - 14, depth: 9 });
-      if (this.tr.theme.sand && !off && spd > 170 && Math.random() < 0.35)
+      if (ctl.thr > 0 && Math.random() < (LITE ? 0.08 : 0.18)) this.fx.spawn('smoke', ex, ey, { tint: 0x2a2622, life: 0.7, s0: 0.16, s1: 0.5, a0: 0.42, vx: -ca2 * 40 + rnd(-10, 10), vy: -sa2 * 40 - 14, depth: 9 });
+      if (this.tr.theme.sand && !off && spd > 170 && Math.random() < (LITE ? 0.08 : 0.2))
         this.fx.spawn('smoke', car.x - ca2 * 20 + rnd(-8, 8), car.y - sa2 * 20 + rnd(-8, 8), { tint: this.dustCol, life: 0.9, s0: 0.3, s1: 1.1, a0: 0.28, vx: -car.vx * 0.12, vy: -car.vy * 0.12, depth: 9 });
       if (car.prevThr > 0 && ctl.thr <= 0 && vf > 180 && Math.random() < 0.55) {
         for (let k = 0; k < 4; k++) this.fx.spawn('soft', ex, ey, { tint: pick([0xffd040, 0xff7a1a, 0x5ab0ff]), add: true, life: 0.14, s0: 0.42, s1: 0.1, a0: 1, vx: -ca2 * rnd(90, 200), vy: -sa2 * rnd(90, 200), depth: 12 });
@@ -480,10 +481,12 @@ class RaceScene extends Phaser.Scene {
       this.fx.spawn('soft', gx, my, { tint: 0xffe08a, add: true, life: 0.07, s0: 0.85, s1: 0.3, a0: 1, depth: 13 });
       this.fx.spawn('spark', gx + ca * 8, my + sa * 8, { tint: 0xfff2c0, add: true, life: 0.05, s0: 0.9, s1: 0.6, sx: 1.8, rot: car.a, a0: 1, depth: 13 });
       this.fx.spawn('spark', gx, my, { tint: 0xffa040, add: true, life: 0.05, s0: 0.5, s1: 0.3, sx: 1.2, rot: car.a + Math.PI / 2 * (car.shots % 2 ? 1 : -1) * 0.6, a0: 0.9, depth: 13 });
-      if (car.shots % 3 === 0) this.fx.spawn('smoke', gx, my, { tint: 0x8a8278, life: 0.5, s0: 0.12, s1: 0.45, a0: 0.35, vx: car.vx * 0.6 + ca * 40, vy: car.vy * 0.6 + sa * 40 - 20, depth: 13 });
-      // ejected brass casing
+      if (!LITE && car.shots % 3 === 0) this.fx.spawn('smoke', gx, my, { tint: 0x8a8278, life: 0.5, s0: 0.12, s1: 0.45, a0: 0.35, vx: car.vx * 0.6 + ca * 40, vy: car.vy * 0.6 + sa * 40 - 20, depth: 13 });
+      // ejected brass casing (desktop only)
+      if (!LITE) {
       const ex = car.x + ca * (car.gunX - 8), ey = car.y + sa * (car.gunX - 8) - hz, side = rnd(150, 230);
       this.fx.spawn('px', ex, ey, { tint: 0xe0b44a, life: 0.45, s0: 0.75, s1: 0.6, sx: 1.8, a0: 1, a1: 0.6, vx: car.vx * 0.85 - sa * side, vy: car.vy * 0.85 + ca * side - 60, drag: 4, vr: rnd(-25, 25), depth: 12 });
+      }
       if (car.isPlayer && car.shots % 4 === 0) this.cameras.main.shake(70, 0.0016);
       this.sfx('gun', car, car.isPlayer ? 0.85 : 0.6);
     }
@@ -542,7 +545,7 @@ class RaceScene extends Phaser.Scene {
   bulletImpact(x, y, dir, onCar) {
     this.fx.spawn('soft', x, y, { tint: onCar ? 0xfff0c0 : 0xffd080, add: true, life: 0.08, s0: onCar ? 0.75 : 0.5, s1: 0.2, a0: 1, depth: 24 });
     this.sparks(x, y, dir, onCar ? 7 : 4);
-    for (let k = 0; k < (onCar ? 2 : 1); k++) {
+    for (let k = 0; k < (LITE ? 0 : onCar ? 2 : 1); k++) {
       const a = dir + rnd(-1.2, 1.2), v = rnd(60, 160);
       this.fx.spawn('px', x, y, { tint: onCar ? 0x2a2622 : 0x6a5a4a, life: rnd(0.3, 0.5), s0: rnd(0.5, 0.9), s1: 0.4, a0: 1, a1: 0.8, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 40, drag: 3, vr: rnd(-20, 20), depth: 21 });
     }
@@ -606,7 +609,7 @@ class RaceScene extends Phaser.Scene {
   explosion(x, y, size) {
     this.fx.spawn('soft', x, y, { tint: 0xfff1c0, add: true, life: 0.25, s0: 1.2 * size, s1: 3.2 * size, a0: 1, depth: 24 });
     this.fx.spawn('ring', x, y, { tint: 0xffc070, add: true, life: 0.45, s0: 0.15, s1: 1.3 * size, a0: 0.8, depth: 24 });
-    for (let k = 0; k < 18 * size; k++) {
+    for (let k = 0; k < (LITE ? 8 : 14) * size; k++) {
       const a = rnd(0, Math.PI * 2), v = rnd(60, 260) * size;
       this.fx.spawn('soft', x, y, { tint: pick([0xff8a1a, 0xffc040, 0xff4a10]), add: true, life: rnd(0.3, 0.7), s0: rnd(0.5, 1) * size, s1: 0.1, a0: 1, vx: Math.cos(a) * v, vy: Math.sin(a) * v, drag: 4, depth: 23 });
       if (k % 2 === 0) this.fx.spawn('smoke', x, y, { tint: 0x2a2a2a, life: rnd(1.2, 2.2), s0: 0.6 * size, s1: 2.2 * size, a0: 0.7, vx: Math.cos(a) * v * 0.3, vy: Math.sin(a) * v * 0.3, drag: 2, depth: 22, vr: rnd(-1, 1) });
@@ -635,14 +638,15 @@ class RaceScene extends Phaser.Scene {
   updateFires(dt) {
     this.fireT -= dt;
     if (this.fireT > 0 || !this.tr.fires.length) return;
-    this.fireT = 0.055;
+    this.fireT = LITE ? 0.16 : 0.08;
     const v = this.cameras.main.worldView;
     for (const f of this.tr.fires) {
       if (f.x < v.x - 80 || f.x > v.right + 80 || f.y < v.y - 40 || f.y > v.bottom + 140) continue;
+      if (LITE ? (f.z > 60 || Math.random() < 0.4) : (f.z > 60 && Math.random() < 0.5)) continue;     // phones: torches keep only their baked glow, fewer barrel flames
       const fy = f.y - f.z * VIEW_K;
       this.fx.spawn('soft', f.x + rnd(-3, 3) * f.s, fy, { tint: pick([0xffd040, 0xff8a1a, 0xff5a10]), add: true, life: rnd(0.35, 0.6), s0: 0.34 * f.s, s1: 0.06, a0: 0.9, vx: rnd(-8, 8), vy: -rnd(40, 70), depth: 9.8 });
-      if (f.big && Math.random() < 0.5) this.fx.spawn('soft', f.x + rnd(-6, 6), fy - rnd(0, 8), { tint: pick([0xff7a1a, 0xff4a10]), add: true, life: rnd(0.4, 0.7), s0: 0.5 * f.s, s1: 0.1, a0: 0.8, vx: rnd(-10, 10), vy: -rnd(50, 90), depth: 9.8 });
-      if (Math.random() < (f.big ? 0.4 : 0.15)) this.fx.spawn('smoke', f.x + rnd(-4, 4), fy - 12, { tint: f.big ? 0x141210 : 0x221d18, life: f.big ? 2.8 : 1.8, s0: 0.3 * f.s, s1: (f.big ? 1.9 : 1.1) * f.s, a0: f.big ? 0.5 : 0.3, vx: rnd(10, 26), vy: -rnd(28, 45), vr: rnd(-0.5, 0.5), depth: 21 });
+      if (!LITE && f.big && Math.random() < 0.3) this.fx.spawn('soft', f.x + rnd(-6, 6), fy - rnd(0, 8), { tint: pick([0xff7a1a, 0xff4a10]), add: true, life: rnd(0.4, 0.7), s0: 0.5 * f.s, s1: 0.1, a0: 0.8, vx: rnd(-10, 10), vy: -rnd(50, 90), depth: 9.8 });
+      if (Math.random() < (LITE ? (f.big ? 0.3 : 0.08) : (f.big ? 0.3 : 0.1))) this.fx.spawn('smoke', f.x + rnd(-4, 4), fy - 12, { tint: f.big ? 0x141210 : 0x221d18, life: f.big ? 2.8 : 1.8, s0: 0.3 * f.s, s1: (f.big ? 1.9 : 1.1) * f.s, a0: f.big ? 0.5 : 0.3, vx: rnd(10, 26), vy: -rnd(28, 45), vr: rnd(-0.5, 0.5), depth: 21 });
     }
   }
 
@@ -811,11 +815,11 @@ class HudScene extends Phaser.Scene {
     this.hurtR = this.add.rectangle(this.W / 2, this.H / 2, this.W, this.H, 0xff0000, 0).setDepth(-1);
     // ambience: dusty vignette + blowing sand / ash / embers (screen space, under the HUD)
     const haze = this.race.tr.theme.haze;
-    this.add.image(this.W / 2, this.H / 2, 'vignette').setDisplaySize(this.W, this.H).setDepth(-3);
-    this.add.rectangle(this.W / 2, this.H / 2, this.W, this.H, haze === 'ash' ? 0x5a4c44 : haze === 'toxic' ? 0x7aa030 : haze === 'ember' ? 0xff6a20 : 0xd89a58, haze === 'ember' ? 0.05 : 0.07).setDepth(-3);
+    if (!LITE) this.add.image(this.W / 2, this.H / 2, 'vignette').setDisplaySize(this.W, this.H).setDepth(-3);
+    if (!LITE) this.add.rectangle(this.W / 2, this.H / 2, this.W, this.H, haze === 'ash' ? 0x5a4c44 : haze === 'toxic' ? 0x7aa030 : haze === 'ember' ? 0xff6a20 : 0xd89a58, haze === 'ember' ? 0.05 : 0.07).setDepth(-3);
     this.amb = { type: haze, g: this.add.graphics().setDepth(-2), p: [] };
     if (haze === 'ember') this.amb.g.setBlendMode(Phaser.BlendModes.ADD);
-    for (let k = 0; k < (haze === 'sand' ? 46 : 60); k++) this.amb.p.push({ x: rnd(0, this.W), y: rnd(0, this.H), v: rnd(0.6, 1.4), l: rnd(18, 60), a: rnd(0.08, 0.28), ph: rnd(0, 7) });
+    for (let k = 0; k < (LITE ? 12 : haze === 'sand' ? 30 : 40); k++) this.amb.p.push({ x: rnd(0, this.W), y: rnd(0, this.H), v: rnd(0.6, 1.4), l: rnd(18, 60), a: rnd(0.08, 0.28), ph: rnd(0, 7) });
     // touch controls
     this.buildTouch();
     // pause overlay
@@ -937,7 +941,10 @@ class HudScene extends Phaser.Scene {
       const hf = clamp(c.hp / c.maxHp, 0, 1);
       lg.fillStyle(0x333333, 1).fillRect(lx + 164, ty + 8, 60, 6);
       if (!c.dead) lg.fillStyle(hf > 0.5 ? 0x4ad04a : hf > 0.25 ? 0xffb020 : 0xff3a2a, 1).fillRect(lx + 164, ty + 8, 60 * hf, 6);
-      this.listT[i].setPosition(lx + 18, ty + 1).setText(`${i + 1}. ${c.name}${c.dead ? ' ✖' : c.finished ? ' ⚑' : ''}`).setColor(c.dead ? '#888' : c.isPlayer ? '#ffe14a' : '#fff');
+      const lt = this.listT[i], txt = `${i + 1}. ${c.name}${c.dead ? ' ✖' : c.finished ? ' ⚑' : ''}`, col = c.dead ? '#888' : c.isPlayer ? '#ffe14a' : '#fff';
+      if (lt.x !== lx + 18 || lt.y !== ty + 1) lt.setPosition(lx + 18, ty + 1);
+      if (lt._t !== txt) { lt._t = txt; lt.setText(txt); }
+      if (lt._c !== col) { lt._c = col; lt.setColor(col); }
     });
     this.wrongT.setVisible(p.wrongT > 1 && !p.dead && Math.floor(r.raceT * 3) % 2 === 0);
     this.updateAmbience();

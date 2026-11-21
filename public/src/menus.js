@@ -100,7 +100,7 @@ class TitleScene extends Phaser.Scene {
     this.add.rectangle(GW / 2, GH / 2, GW, GH, 0xd89a58, 0.07).setDepth(-1);
     menuAmbience(this, [], true);
     const cg = this.add.graphics();
-    drawChain(cg, 95, -10, 120, 52, 0); drawChain(cg, 505, -10, 480, 52, 0);
+    chainSprite(this, 95, -10, 120, 52); chainSprite(this, 505, -10, 480, 52);
     rustPlate(this, 50, 48, 500, 285, { spikes: true, spikesBottom: true, alpha: 0.85, dim: 0.25 });
     const hook = this.add.graphics(); rivet(hook, 120, 58, 5); rivet(hook, 480, 58, 5);
     this.add.image(GW - 170, 618, 'bonepile').setScale(1.05).setDepth(5);
@@ -156,7 +156,7 @@ class GarageScene extends Phaser.Scene {
     makeButton(this, UW - 190, 32, 110, 40, 'MENU', () => this.scene.start('title'), { color: 0x4a3f36, size: 16 });
     this.buildCar(c); this.buildShop(c); this.buildRanking(c); this.buildRaces(c);
     const cg = this.add.graphics();
-    drawChain(cg, 430, 66, 430, 560); drawChain(cg, 850, 66, 850, 560);
+    chainSprite(this, 430, 66, 430, 560); chainSprite(this, 850, 66, 850, 560);
     rivet(cg, 430, 70, 4); rivet(cg, 850, 70, 4);
   }
 
@@ -165,9 +165,7 @@ class GarageScene extends Phaser.Scene {
     panel(this, x, y, w, h, CARS[c.car].name.toUpperCase());
     const st = carStats(c.car, c.up, c.mg);
     this.add.image(x + w / 2 + 10, y + 166, 'soft').setTint(0x000000).setAlpha(0.5).setScale(3.4, 1.3).setDepth(0.5);
-    const sp = addCarImage(this, x + w / 2, y + 160, st.shape, PLAYER_COLOR, 1.75, 0.5, true).setDepth(1);
-    let ang = 0.5;
-    this.time.addEvent({ delay: 50, loop: true, callback: () => { ang += 0.022; sp.setFrame(carFrame(ang).name); } });
+    addCarImage(this, x + w / 2, y + 160, st.shape, PLAYER_COLOR, 1.75, 0.5).setDepth(1);   // static showcase angle
     const fr = statFracs(st);
     statBar(this, x + 24, y + 236, w - 48, t('speed'), fr.speed);
     statBar(this, x + 24, y + 264, w - 48, t('accel'), fr.accel);
@@ -417,9 +415,7 @@ class VictoryScene extends Phaser.Scene {
     this.add.text(UW / 2, 170, t('victory'), { fontFamily: FONT, fontSize: '68px', color: '#ffe14a', stroke: '#5a2a00', strokeThickness: 10, resolution: 2 }).setOrigin(0.5);
     this.add.text(UW / 2, 260, t('victoryTxt'), { fontFamily: FONT_B, fontSize: '24px', fontStyle: 'bold', color: '#ffffff', resolution: 2 }).setOrigin(0.5);
     this.add.text(UW / 2, 310, t('stats', c.races, c.wins, c.kills), { fontFamily: FONT_B, fontSize: '20px', color: '#b0b0bc', resolution: 2 }).setOrigin(0.5);
-    const car = addCarImage(this, UW / 2, 460, CARS[c.car].shape, PLAYER_COLOR, 2.2, 0, true);
-    let ang = 0;
-    this.time.addEvent({ delay: 40, loop: true, callback: () => { ang += 0.04; car.setFrame(carFrame(ang).name); } });
+    addCarImage(this, UW / 2, 460, CARS[c.car].shape, PLAYER_COLOR, 2.2, 0.5);
     makeButton(this, UW / 2 - 170, 600, 300, 64, t('cont'), () => this.scene.start('garage'), { color: 0x5f8a2a });
     makeButton(this, UW / 2 + 170, 600, 300, 64, t('newCareer'), () => { Save.clear(); G.career = newCareer(); this.scene.start('garage'); }, { color: 0x8a2a2a, size: 22 });
     this.time.addEvent({ delay: 60, loop: true, callback: () => {
