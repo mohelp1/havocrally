@@ -92,6 +92,7 @@ class BootScene extends Phaser.Scene {
   create() {
     makeFxTextures(this);
     makeMenuTextures(this);
+    CONVOY.forEach(([sh, col, kit]) => carFrameTex(this, sh, col, 0, kit));   // pre-draw the title convoy (no hitches later)
     this.input.keyboard.addCapture('UP,DOWN,LEFT,RIGHT,SPACE');
     G.career = Save.load();
     if (G.career) G.career.offers = makeOffers(G.career);     // older saves used a different tier layout
@@ -104,17 +105,23 @@ class BootScene extends Phaser.Scene {
 class TitleScene extends Phaser.Scene {
   constructor() { super('title'); }
   create() {
-    this.scene.launch('race', { demo: true, track: pick(RACE_TRACKS) });
-    this.scene.bringToTop();
+    // desktop: live demo race behind the menu; phones: a still wasteland backdrop (much lighter)
+    if (!MOBILE_UI) {
+      this.scene.launch('race', { demo: true, track: pick(RACE_TRACKS) });
+      this.scene.bringToTop();
+    }
     uiCam(this);
-    const g = this.add.graphics();
+    if (MOBILE_UI) menuBackdrop(this);
+    const g = this.add.graphics().setDepth(MOBILE_UI ? -2 : 0);
     g.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0.82, 0.15, 0.82, 0.15).fillRect(0, 0, GW, GH);
     g.fillStyle(0x000000, 0.35).fillRect(0, GH - 58, GW, 58);
-    if (!LITE) {
-      this.add.image(GW / 2, GH / 2, 'vignette').setDisplaySize(GW, GH).setDepth(-1);
-      this.add.rectangle(GW / 2, GH / 2, GW, GH, 0xd89a58, 0.07).setDepth(-1);
+    if (!MOBILE_UI) {
+      if (!LITE) {
+        this.add.image(GW / 2, GH / 2, 'vignette').setDisplaySize(GW, GH).setDepth(-1);
+        this.add.rectangle(GW / 2, GH / 2, GW, GH, 0xd89a58, 0.07).setDepth(-1);
+      }
+      menuAmbience(this, [], true);
     }
-    menuAmbience(this, [], true);
     const cg = this.add.graphics();
     chainSprite(this, 95, -10, 120, 52); chainSprite(this, 505, -10, 480, 52);
     rustPlate(this, 50, 48, 500, 285, { spikes: true, spikesBottom: true, alpha: 0.85, dim: 0.25 });   // cached texture

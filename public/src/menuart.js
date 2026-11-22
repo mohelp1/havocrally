@@ -297,8 +297,9 @@ function menuBackdrop(scene) {
   menuAmbience(scene, (G.menuFires || []).map(f => ({ ...f, x: f.x - ox, depth: -6 })));
 }
 // buggies and war cars tearing across the screen, kicking up dust
+const CONVOY = [[4, 0xffd23f, 'kudla'], [7, 0xff4fa3, 'zdena'], [5, 0xff8a3d, 'vyfuk'], [6, 0x8fd14f, 'srot'], [7, 0x3fa7ff, 'bara'], [3, 0x262626, 'baron']];
 function startConvoy(scene, y, scale, depth) {
-  const lineup = [[4, 0xffd23f, 'kudla'], [7, 0xff4fa3, 'zdena'], [5, 0xff8a3d, 'vyfuk'], [6, 0x8fd14f, 'srot'], [7, 0x3fa7ff, 'bara'], [3, 0x262626, 'baron']];
+  const lineup = CONVOY;
   const cars = [];
   let timer = 0.5, idx = 0;
   scene.convoy = dt => {
