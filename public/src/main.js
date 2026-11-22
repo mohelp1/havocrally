@@ -14,8 +14,8 @@ Poki.init().then(() => {
   window.__game = new Phaser.Game({
     type: Phaser.AUTO,
     parent: 'game',
-    width: GW,
-    height: GH,
+    width: Math.round(GW * RS),
+    height: Math.round(GH * RS),
     backgroundColor: '#101014',
     disableContextMenu: true,
     render: { antialias: true, mipmapFilter: 'LINEAR_MIPMAP_LINEAR', powerPreference: 'high-performance' },

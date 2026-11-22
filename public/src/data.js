@@ -13,6 +13,8 @@ const GW = (() => {
 })();
 const MX = (GW - UW) / 2;                    // menus scroll by -MX to stay centered
 const MOBILE_UI = (() => { try { return window.matchMedia('(pointer: coarse)').matches || Math.min(innerWidth, innerHeight) < 520; } catch (e) { return false; } })();
+// phones render at a lower internal resolution (fill-rate is the bottleneck on budget GPUs); cameras zoom by RS
+const RS = MOBILE_UI ? 0.7 : 1;
 const FONT = '"Arial Black", "Segoe UI Black", Impact, sans-serif';
 const FONT_B = '"Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
 
@@ -28,7 +30,7 @@ function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.fl
 const STR = {
     subtitle: 'Gasoline. Guns. Glory.',
     play: 'PLAY', cont: 'CONTINUE', newCareer: 'NEW CAREER', sure: 'REALLY DELETE?',
-    controls: 'Arrows / WASD – drive   ·   Space – machine gun   ·   X – mine   ·   Shift – nitro   ·   Esc – pause',
+    controls: 'Arrows / WASD – drive   ·   Space – fire   ·   Q – switch weapon   ·   X – mine   ·   Shift – nitro   ·   Esc – pause',
     controlsTouch: 'Touch controls: ◀ ▶ to steer, throttle is automatic',
     garage: 'SCRAP GARAGE', points: 'Points', raceNo: 'Race #{0}',
     speed: 'Top speed', accel: 'Acceleration', handling: 'Handling', armor: 'Armor', condition: 'Condition',
@@ -36,7 +38,8 @@ const STR = {
     upgrades: 'UPGRADES', engine: 'Engine', tires: 'Tires', plating: 'Armor plating', mg: 'Machine gun',
     mines: 'Mines', nitro: 'Nitro', max: 'MAX', dealer: 'JUNKYARD DEALER',
     ranking: 'STANDINGS', you: 'You',
-    diff: ['EASY', 'MEDIUM', 'HARD', 'FINAL'],
+    diff: ['EASY', 'MEDIUM', 'HARD', 'BRUTAL', 'INSANE', 'WARLORD', 'FINAL'],
+    tierLocked: '{0} unlocks at {1} pts',
     prize: 'Prize {0}', race: 'RACE!', opponents: 'Rivals:',
     bossLocked: 'Reach {0} pts to challenge the Black Baron!',
     bossCard: 'Title showdown',
@@ -55,7 +58,9 @@ const STR = {
     owned: 'YOUR CAR', buyFor: 'BUY  {0}', tradeIn: 'Trade-in for your car: {0}', close: 'CLOSE',
     noMoney: 'Not enough cash!', bought: 'Purchased!', rotate: 'Please rotate your device',
     carDesc: ['Rusty little bug with a spiked bumper. Runs on hope.', 'Blown hot-rod coupe. Loud, fast and angry.', 'Low wedge with a wing and a supercharger. Sticks to the sand.', 'Scrap-plated war truck. Ramming it is a mistake.'],
-    upDesc: { engine: 'top speed & acceleration', tires: 'grip & steering', plating: 'car durability', mg: 'machine gun damage', mines: 'pack of 3 mines', nitro: 'one nitro charge' }
+    upDesc: { engine: 'top speed & acceleration', tires: 'grip & steering', plating: 'car durability', mg: 'machine gun damage', mines: 'pack of 3 mines', nitro: 'one nitro charge',
+      flame: 'short range, sets cars on fire', bazooka: 'slow rockets, huge damage', rockets: 'pack of 2 rockets' },
+    flame: 'Flamethrower', bazooka: 'Bazooka', rockets: 'Rockets', owned: 'OWNED',
 };
 function t(k, ...a) {
   let s = STR[k]; if (s === undefined) return k;
@@ -69,66 +74,78 @@ const money = n => '$' + Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/
 // ---------------- auta ----------------
 const CARS = [
   { name: 'Rustbug', price: 0,     speed: 385, accel: 320, turn: 3.15, grip: 6.0, hp: 100, mass: 1.0,  shape: 0 },
-  { name: 'Scorcher',  price: 2400,  speed: 432, accel: 366, turn: 3.3, grip: 6.7, hp: 130, mass: 1.1,  shape: 1 },
-  { name: 'Razorback',  price: 5800,  speed: 480, accel: 413, turn: 3.45, grip: 7.4, hp: 160, mass: 1.2, shape: 2 },
-  { name: 'Juggernaut',  price: 11500, speed: 522, accel: 455, turn: 3.5, grip: 7.9, hp: 220, mass: 1.5,  shape: 3 }
+  { name: 'Scorcher',  price: 2200,  speed: 432, accel: 366, turn: 3.3, grip: 6.7, hp: 130, mass: 1.1,  shape: 1 },
+  { name: 'Razorback',  price: 7500,  speed: 480, accel: 413, turn: 3.45, grip: 7.4, hp: 160, mass: 1.2, shape: 2 },
+  { name: 'Juggernaut',  price: 16000, speed: 522, accel: 455, turn: 3.5, grip: 7.9, hp: 220, mass: 1.5,  shape: 3 }
 ];
 const UPGRADES = ['engine', 'tires', 'plating'];
-const UP_BASE = { engine: 320, tires: 260, plating: 280 };
-const upCost = (carIdx, key, lvl) => Math.round(UP_BASE[key] * (1 + carIdx * 0.85) * (lvl + 1) / 10) * 10;
-const MG_COST = [450, 900, 1600];
+// economy tuned by a career simulation: ~15 fast minutes, about 2 hours to the title
+const UP_MAX = 10;
+const UP_BASE = { engine: 150, tires: 120, plating: 130 };
+const UP_CAR_MULT = [1, 1.8, 3.0, 4.6];
+const UP_LV = [1, 1.5, 2.2, 3.1, 4.3, 5.8, 7.7, 10, 13, 17];
+const upCost = (carIdx, key, lvl) => Math.round(UP_BASE[key] * UP_CAR_MULT[carIdx] * UP_LV[lvl] / 10) * 10;
+const MG_COST = [300, 550, 900, 1400, 2100, 3000, 4200, 5800, 7800, 10500];
 const MINE_PACK = 150, MINE_MAX = 9, NITRO_COST = 120, NITRO_MAX = 6;
+const FLAME_COST = 2500, BAZOOKA_COST = 6500, ROCKET_PACK = 300, ROCKET_MAX = 8;
 const REPAIR_PER_HP = 3;
 
 function carStats(carIdx, up, mgLvl, mult = 1) {
   const c = CARS[carIdx];
   return {
-    speed: c.speed * (1 + 0.065 * up.engine) * mult,
-    accel: c.accel * (1 + 0.1 * up.engine) * mult,
-    turn: c.turn * (1 + 0.05 * up.tires),
-    grip: c.grip * (1 + 0.12 * up.tires),
-    hp: Math.round(c.hp * (1 + 0.25 * up.plating)),
+    speed: c.speed * (1 + 0.024 * up.engine) * mult,
+    accel: c.accel * (1 + 0.035 * up.engine) * mult,
+    turn: c.turn * (1 + 0.018 * up.tires),
+    grip: c.grip * (1 + 0.04 * up.tires),
+    hp: Math.round(c.hp * (1 + 0.09 * up.plating)),
     mass: c.mass,
     shape: c.shape,
-    mgDmg: 2.55 * (1 + 0.45 * mgLvl)
+    mgDmg: 3.3 * (1 + 0.16 * mgLvl)
   };
 }
 
 // ---------------- jezdci ----------------
 const PLAYER_COLOR = 0xd8262e;
 const DRIVERS = [
-  { id: 'bara',   name: 'Rust Widow',     color: 0x3fa7ff, skill: 0.32, tier: 0, pts: 2, vis: 7 },
-  { id: 'kudla',  name: 'Shiv',               color: 0xffd23f, skill: 0.38, tier: 0, pts: 4, vis: 4 },
-  { id: 'srot',   name: 'Doc Scrap',    color: 0x8fd14f, skill: 0.44, tier: 0, pts: 6, vis: 6 },
-  { id: 'vyfuk',  name: 'Gasket', color: 0xff8a3d, skill: 0.5,  tier: 1, pts: 9, vis: 5 },
-  { id: 'rada',   name: 'Rusty Rudy',   color: 0xb87a3d, skill: 0.56, tier: 1, pts: 12, vis: 0 },
-  { id: 'mlynek', name: 'Grinder',           color: 0x9b59ff, skill: 0.63, tier: 1, pts: 16, vis: 2 },
-  { id: 'zdena',  name: 'Toothy Tess', color: 0xff4fa3, skill: 0.71, tier: 2, pts: 20, vis: 7 },
-  { id: 'jed',    name: 'Jinx',           color: 0x2de0c0, skill: 0.79, tier: 2, pts: 25, vis: 4 },
-  { id: 'hrom',   name: 'Sandstorm',             color: 0xe8e8e8, skill: 0.87, tier: 3, pts: 31, vis: 5 }
+  { id: 'bara',   name: 'Rust Widow',     color: 0x3fa7ff, skill: 0.32, tier: 0, pts: 10, vis: 7 },
+  { id: 'kudla',  name: 'Shiv',               color: 0xffd23f, skill: 0.38, tier: 0, pts: 20, vis: 4 },
+  { id: 'srot',   name: 'Doc Scrap',    color: 0x8fd14f, skill: 0.44, tier: 0, pts: 35, vis: 6 },
+  { id: 'vyfuk',  name: 'Gasket', color: 0xff8a3d, skill: 0.5,  tier: 1, pts: 55, vis: 5 },
+  { id: 'rada',   name: 'Rusty Rudy',   color: 0xb87a3d, skill: 0.56, tier: 1, pts: 80, vis: 0 },
+  { id: 'mlynek', name: 'Grinder',           color: 0x9b59ff, skill: 0.63, tier: 1, pts: 110, vis: 2 },
+  { id: 'zdena',  name: 'Toothy Tess', color: 0xff4fa3, skill: 0.71, tier: 2, pts: 150, vis: 7 },
+  { id: 'jed',    name: 'Jinx',           color: 0x2de0c0, skill: 0.79, tier: 2, pts: 200, vis: 4 },
+  { id: 'hrom',   name: 'Sandstorm',             color: 0xe8e8e8, skill: 0.87, tier: 3, pts: 260, vis: 5 }
 ];
-const BOSS = { id: 'baron', name: 'Black Baron', color: 0x262626, skill: 1.0, tier: 3, pts: 50, vis: 3 };
+const BOSS = { id: 'baron', name: 'Black Baron', color: 0x262626, skill: 1.0, tier: 3, pts: 600, vis: 3 };
 // each rival's own paint job and bolted-on scrap (see carModel in art.js)
 const KITS = {
   bara:   { rust: 0.18, decals: ['flames'], addons: ['zoomies'] },
   kudla:  { rust: 0.3, decals: ['hazard'], addons: ['flags'], flag: '#d8b020' },
   srot:   { rust: 0.3, decals: ['skull'], addons: ['ladder', 'roofTires'] },
-  vyfuk:  { rust: 0.22, decals: ['twotone'], addons: ['bedjunk', 'cage'], col2: '#2a1a12' },
+  vyfuk:  { heavy: 'flame', rust: 0.22, decals: ['twotone'], addons: ['bedjunk', 'cage'], col2: '#2a1a12' },
   rada:   { rust: 0.55, decals: ['rustheavy'], addons: ['roofTires', 'harpoon'] },
-  mlynek: { rust: 0.2, decals: ['checker'], addons: ['saws'] },
-  zdena:  { rust: 0.12, decals: ['teeth'], addons: ['harpoon', 'flags'], flag: '#ff4fa3' },
-  jed:    { rust: 0.25, decals: ['camo'], addons: ['flags'], flag: '#2de0c0' },
-  hrom:   { rust: 0.3, decals: ['camo', 'twotone'], addons: ['ram', 'cage'], col2: '#6a5a40' },
-  baron:  { rust: 0.08, decals: ['skull', 'hazard'], addons: ['ram', 'bigspikes', 'flags'], flag: '#8a1010' }
+  mlynek: { heavy: 'flame', rust: 0.2, decals: ['checker'], addons: ['saws'] },
+  zdena:  { heavy: 'flame', rust: 0.12, decals: ['teeth'], addons: ['harpoon', 'flags'], flag: '#ff4fa3' },
+  jed:    { heavy: 'rocket', rust: 0.25, decals: ['camo'], addons: ['flags'], flag: '#2de0c0' },
+  hrom:   { heavy: 'rocket', rust: 0.3, decals: ['camo', 'twotone'], addons: ['ram', 'cage'], col2: '#6a5a40' },
+  baron:  { heavy: 'both', rust: 0.08, decals: ['skull', 'hazard'], addons: ['ram', 'bigspikes', 'flags'], flag: '#8a1010' }
 };
-const BOSS_POINTS = 50;
+const BOSS_POINTS = 600;
 const driverDef = id => (id === 'baron' ? BOSS : DRIVERS.find(d => d.id === id));
 
 // ---------------- závody ----------------
-const PRIZES = [[400, 220, 100, 0], [800, 450, 220, 0], [1500, 850, 400, 0], [6000, 0, 0, 0]];
-const POINTS = [[6, 3, 1, 0], [12, 6, 2, 0], [18, 9, 3, 0], [0, 0, 0, 0]];
-const BOUNTY = [100, 180, 260, 500];
-const LAPS = [3, 3, 4, 4];
+// tiers 0..5 = EASY..WARLORD, 6 = the final against the Black Baron
+const FINAL = 6;
+const TIER_UNLOCK = [0, 0, 10, 60, 170, 360];
+const PRIZES = [[450, 250, 120, 0], [800, 450, 220, 0], [1400, 800, 400, 0], [2400, 1350, 680, 0], [3800, 2100, 1050, 0], [5600, 3100, 1550, 0], [15000, 0, 0, 0]];
+const POINTS = [[4, 2, 1, 0], [6, 3, 1, 0], [10, 5, 2, 0], [16, 8, 4, 0], [24, 12, 6, 0], [34, 17, 8, 0], [0, 0, 0, 0]];
+const BOUNTY = [120, 180, 260, 360, 480, 640, 900];
+const LAPS = [2, 3, 3, 4, 4, 5, 4];
+// rival cars per tier: car class, upgrade level, pace multiplier
+const TIER_AI = [{ car: 0, lvl: 0, mult: 0.92 }, { car: 0, lvl: 3, mult: 0.95 }, { car: 1, lvl: 3, mult: 0.95 }, { car: 2, lvl: 4, mult: 0.96 },
+  { car: 3, lvl: 4, mult: 0.97 }, { car: 3, lvl: 8, mult: 0.985 }, { car: 3, lvl: 10, mult: 0.965 }];
+const tierUnlocked = (c, t) => c.points >= TIER_UNLOCK[t];
 
 // trati v mřížce (1 jednotka = TRACK_G px); první bod leží uprostřed rovinky (start)
 const TRACKS = [
@@ -160,7 +177,7 @@ const RACE_TRACKS = TRACKS.map((_, i) => i).filter(i => i !== BOSS_TRACK);
 function newCareer() {
   const c = {
     v: 1, money: 700, points: 0, raceNo: 1, car: 0, up: { engine: 0, tires: 0, plating: 0 },
-    mg: 0, mines: 3, nitro: 2, hp: 0, races: 0, wins: 0, kills: 0, champion: false, tipSeen: false,
+    mg: 0, mines: 3, nitro: 2, flame: false, bazooka: false, rockets: 0, hp: 0, races: 0, wins: 0, kills: 0, champion: false, tipSeen: false,
     drivers: DRIVERS.map(d => ({ id: d.id, points: d.pts, tier: d.tier })), offers: null
   };
   c.hp = maxHp(c);
@@ -169,18 +186,18 @@ function newCareer() {
 }
 const maxHp = c => carStats(c.car, c.up, c.mg).hp;
 
+// three races from the highest unlocked tiers (+ the final once the player has enough points)
 function makeOffers(c) {
   const ranked = c.drivers.slice().sort((a, b) => a.points - b.points);
-  const pools = [ranked.slice(0, 5), ranked.slice(2, 7), ranked.slice(4, 9)];
+  const pool = t => ranked.slice(Math.min(4, t), Math.min(9, t + 5));
+  const top = Math.max(1, [0, 1, 2, 3, 4, 5].filter(t => tierUnlocked(c, t)).pop());
+  const tiers = [Math.max(0, top - 2), Math.max(0, top - 1), top];
   const tracks = shuffle(RACE_TRACKS.slice());
-  const offers = [0, 1, 2].map(d => ({
-    diff: d, track: tracks[d], laps: LAPS[d] - (TRACKS[tracks[d]].long ? 1 : 0),
-    opp: shuffle(pools[d].map(x => x.id)).slice(0, 3)
+  const offers = tiers.map((d, i) => ({
+    diff: d, track: tracks[i], laps: Math.max(2, LAPS[d] - (d > 0 && TRACKS[tracks[i]].long ? 1 : 0)),
+    opp: shuffle(pool(d).map(x => x.id)).slice(0, 3)
   }));
-  if (c.points >= BOSS_POINTS) {
-    const top = ranked.slice(-2).map(x => x.id);
-    offers.push({ diff: 3, track: BOSS_TRACK, laps: LAPS[3] - 1, opp: ['baron', ...top] });
-  }
+  if (c.points >= BOSS_POINTS) offers.push({ diff: FINAL, track: BOSS_TRACK, laps: LAPS[FINAL] - 1, opp: ['baron', ...ranked.slice(-2).map(x => x.id)] });
   return offers;
 }
 
@@ -188,9 +205,9 @@ function makeOffers(c) {
 function simulateOthers(c, raced) {
   c.drivers.forEach(d => {
     const def = driverDef(d.id);
-    if (!raced.includes(d.id) && Math.random() < 0.6) d.points += Math.round(Math.random() * def.skill * 6);
-    d.points = Math.min(d.points, BOSS_POINTS - 2 - Math.floor((1 - def.skill) * 10));
-    const want = d.points >= 40 ? 3 : d.points >= 24 ? 2 : d.points >= 10 ? 1 : 0;
+    if (!raced.includes(d.id) && Math.random() < 0.7) d.points += Math.round(Math.random() * def.skill * 14);
+    d.points = Math.min(d.points, BOSS_POINTS - 10 - Math.floor((1 - def.skill) * 80));
+    const want = d.points >= 400 ? 3 : d.points >= 220 ? 2 : d.points >= 90 ? 1 : 0;
     d.tier = Math.max(d.tier, Math.min(want, def.tier + 1));
   });
 }

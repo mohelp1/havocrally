@@ -8,6 +8,8 @@ function mixInt(col, f) {
   const m = c => Math.round(clamp(f >= 0 ? c + (255 - c) * f : c * (1 + f), 0, 255));
   return (m(r) << 16) | (m(g) << 8) | m(b);
 }
+// menu cameras: logical 1280/GW x 720 layout, rendered at RS
+const uiCam = (scene, scrollX = 0) => scene.cameras.main.setOrigin(0, 0).setZoom(RS).setScroll(scrollX, 0);
 const hexStr = col => '#' + col.toString(16).padStart(6, '0');
 
 function makeButton(scene, x, y, w, h, label, cb, o = {}) {
@@ -82,6 +84,7 @@ class BootScene extends Phaser.Scene {
     makeMenuTextures(this);
     this.input.keyboard.addCapture('UP,DOWN,LEFT,RIGHT,SPACE');
     G.career = Save.load();
+    if (G.career) G.career.offers = makeOffers(G.career);     // older saves used a different tier layout
     Poki.loadingFinished();
     this.scene.start('title');
   }
@@ -93,11 +96,14 @@ class TitleScene extends Phaser.Scene {
   create() {
     this.scene.launch('race', { demo: true, track: pick(RACE_TRACKS) });
     this.scene.bringToTop();
+    uiCam(this);
     const g = this.add.graphics();
     g.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0.82, 0.15, 0.82, 0.15).fillRect(0, 0, GW, GH);
     g.fillStyle(0x000000, 0.35).fillRect(0, GH - 58, GW, 58);
-    this.add.image(GW / 2, GH / 2, 'vignette').setDisplaySize(GW, GH).setDepth(-1);
-    this.add.rectangle(GW / 2, GH / 2, GW, GH, 0xd89a58, 0.07).setDepth(-1);
+    if (!LITE) {
+      this.add.image(GW / 2, GH / 2, 'vignette').setDisplaySize(GW, GH).setDepth(-1);
+      this.add.rectangle(GW / 2, GH / 2, GW, GH, 0xd89a58, 0.07).setDepth(-1);
+    }
     menuAmbience(this, [], true);
     const cg = this.add.graphics();
     chainSprite(this, 95, -10, 120, 52); chainSprite(this, 505, -10, 480, 52);
@@ -134,7 +140,7 @@ class TitleScene extends Phaser.Scene {
 class GarageScene extends Phaser.Scene {
   constructor() { super('garage'); }
   create() {
-    this.cameras.main.setScroll(-MX, 0);
+    uiCam(this, -MX);
     this.starting = false;              // scene instances are reused between visits
     this.cameras.main.fadeIn(250, 0, 0, 0);
     this.build();
@@ -195,26 +201,31 @@ class GarageScene extends Phaser.Scene {
     const rows = [];
     UPGRADES.forEach(k => {
       const lvl = c.up[k];
-      rows.push({ name: t(k), desc: STR.upDesc[k], lvl, max: 3, cost: lvl < 3 ? upCost(c.car, k, lvl) : 0, buy: () => { c.up[k]++; if (k === 'plating') c.hp += carStats(c.car, c.up, c.mg).hp - carStats(c.car, { ...c.up, plating: c.up.plating - 1 }, c.mg).hp; } });
+      rows.push({ name: t(k), desc: STR.upDesc[k], lvl, max: UP_MAX, cost: lvl < UP_MAX ? upCost(c.car, k, lvl) : 0, buy: () => { c.up[k]++; if (k === 'plating') c.hp += carStats(c.car, c.up, c.mg).hp - carStats(c.car, { ...c.up, plating: c.up.plating - 1 }, c.mg).hp; } });
     });
-    rows.push({ name: t('mg'), desc: STR.upDesc.mg, lvl: c.mg, max: 3, cost: c.mg < 3 ? MG_COST[c.mg] : 0, buy: () => { c.mg++; } });
+    rows.push({ name: t('mg'), desc: STR.upDesc.mg, lvl: c.mg, max: UP_MAX, cost: c.mg < UP_MAX ? MG_COST[c.mg] : 0, buy: () => { c.mg++; } });
+    rows.push({ name: t('flame'), desc: STR.upDesc.flame, count: c.flame ? t('owned') : '', full: !!c.flame, cost: FLAME_COST, buy: () => { c.flame = true; } });
+    if (!c.bazooka) rows.push({ name: t('bazooka'), desc: STR.upDesc.bazooka, count: '', full: false, cost: BAZOOKA_COST, buy: () => { c.bazooka = true; c.rockets = Math.max(c.rockets || 0, 2); } });
+    else rows.push({ name: t('rockets'), desc: STR.upDesc.rockets, count: `${c.rockets || 0}/${ROCKET_MAX}`, full: (c.rockets || 0) >= ROCKET_MAX, cost: ROCKET_PACK, buy: () => { c.rockets = Math.min(ROCKET_MAX, (c.rockets || 0) + 2); } });
     rows.push({ name: t('mines'), desc: STR.upDesc.mines, count: `${c.mines}/${MINE_MAX}`, full: c.mines >= MINE_MAX, cost: MINE_PACK, buy: () => { c.mines = Math.min(MINE_MAX, c.mines + 3); } });
     rows.push({ name: t('nitro'), desc: STR.upDesc.nitro, count: `${c.nitro}/${NITRO_MAX}`, full: c.nitro >= NITRO_MAX, cost: NITRO_COST, buy: () => { c.nitro = Math.min(NITRO_MAX, c.nitro + 1); } });
     rows.forEach((r, i) => {
-      const ry = y + 70 + i * 58;
+      const ry = y + 66 + i * 45;
       const g = this.add.graphics();
-      g.fillStyle(0xffffff, i % 2 ? 0.02 : 0.05).fillRoundedRect(x + 10, ry - 26, w - 20, 54, 8);
-      this.add.text(x + 22, ry - 9, r.name, { fontFamily: FONT, fontSize: '17px', color: '#ffffff', resolution: 2 }).setOrigin(0, 0.5);
-      this.add.text(x + 22, ry + 13, r.desc, { fontFamily: FONT_B, fontSize: '13px', color: '#9a9aa8', resolution: 2 }).setOrigin(0, 0.5);
-      if (r.max) for (let k = 0; k < r.max; k++) g.fillStyle(k < r.lvl ? 0xffb52a : 0x40434e, 1).fillRoundedRect(x + 190 + k * 22, ry - 16, 17, 14, 3);
-      else this.add.text(x + 190, ry - 9, r.count, { fontFamily: FONT, fontSize: '17px', color: '#ffb52a', resolution: 2 }).setOrigin(0, 0.5);
+      g.fillStyle(0xffffff, i % 2 ? 0.02 : 0.05).fillRoundedRect(x + 10, ry - 21, w - 20, 42, 7);
+      this.add.text(x + 20, ry - 8, r.name, { fontFamily: FONT, fontSize: '15px', color: '#ffffff', resolution: 2 }).setOrigin(0, 0.5);
+      this.add.text(x + 20, ry + 10, r.desc, { fontFamily: FONT_B, fontSize: '12px', color: '#9a9aa8', resolution: 2 }).setOrigin(0, 0.5);
+      if (r.max) {
+        for (let k = 0; k < r.max; k++) g.fillStyle(k < r.lvl ? 0xffb52a : 0x40434e, 1).fillRect(x + 168 + k * 10, ry - 14, 8, 10);
+        this.add.text(x + 168, ry + 9, `${r.lvl}/${r.max}`, { fontFamily: FONT_B, fontSize: '11px', fontStyle: 'bold', color: '#c8a060', resolution: 2 }).setOrigin(0, 0.5);
+      } else if (r.count) this.add.text(x + 196, ry - 8, r.count, { fontFamily: FONT, fontSize: '15px', color: '#ffb52a', resolution: 2 }).setOrigin(0, 0.5);
       const maxed = r.max ? r.lvl >= r.max : r.full;
-      makeButton(this, x + w - 72, ry, 112, 40, maxed ? t('max') : money(r.cost), () => {
+      makeButton(this, x + w - 68, ry, 108, 34, maxed ? (r.max ? t('max') : t('owned')) : money(r.cost), () => {
         if (c.money < r.cost) { toast(this, t('noMoney')); Sound.play('deny'); return; }
         c.money -= r.cost; r.buy(); Sound.play('buy'); Save.store(c); this.rebuild();
-      }, { color: c.money >= r.cost ? 0x5f8a2a : 0x6b3030, size: 16, disabled: maxed });
+      }, { color: c.money >= r.cost ? 0x5f8a2a : 0x6b3030, size: 15, disabled: maxed });
     });
-    makeButton(this, x + w / 2, y + h - 40, w - 60, 52, '🚗  ' + t('dealer'), () => this.showDealer(), { color: 0xc0601a, size: 22 });
+    makeButton(this, x + w / 2, y + h - 30, w - 60, 42, '🚗  ' + t('dealer'), () => this.showDealer(), { color: 0xc0601a, size: 22 });
   }
 
   buildRanking(c) {
@@ -236,9 +247,9 @@ class GarageScene extends Phaser.Scene {
   buildRaces(c) {
     const offers = c.offers, n = offers.length, gap = 14, x0 = 20, y = 566, h = 140;
     const w = (UW - 40 - gap * (n - 1)) / n;
-    const diffCol = [0x2e9e4a, 0xd89a1a, 0xc8322a, 0x7a1010];
+    const diffCol = [0x2e9e4a, 0xd89a1a, 0xc8322a, 0x9a3aa8, 0x2a6ab8, 0x3a3a3a, 0x7a1010];
     offers.forEach((o, i) => {
-      const x = x0 + i * (w + gap), boss = o.diff === 3;
+      const x = x0 + i * (w + gap), boss = o.diff === FINAL;
       const g = this.add.graphics();
       drawSpikes(g, x + 24, y, w - 48, Math.round(w / 40), 9, -1);
       g.fillStyle(0x000000, 0.35).fillRoundedRect(x + 3, y + 5, w, h, 14);
@@ -253,7 +264,9 @@ class GarageScene extends Phaser.Scene {
       this.add.text(x + 14, y + 98, t('opponents') + ' ' + names, { fontFamily: FONT_B, fontSize: '13px', color: '#b0b0bc', resolution: 2, wordWrap: { width: w - 150 } }).setOrigin(0, 0.5);
       makeButton(this, x + w - 70, y + h - 30, 116, 44, t('race'), () => this.startRace(o), { color: diffCol[o.diff], size: 19 });
     });
-    if (!offers.some(o => o.diff === 3) && !c.champion) {
+    const next = TIER_UNLOCK.findIndex((p, ti) => ti > 0 && c.points < p);
+    if (next > 0) this.add.text(UW / 2, 557, t('tierLocked', STR.diff[next], TIER_UNLOCK[next]), { fontFamily: FONT_B, fontSize: '13px', fontStyle: 'bold', color: '#ffd36a', stroke: '#000', strokeThickness: 3, resolution: 2 }).setOrigin(0.5).setDepth(5);
+    if (!offers.some(o => o.diff === FINAL) && !c.champion) {
       this.add.text(1060, 538, t('bossLocked', BOSS_POINTS), { fontFamily: FONT_B, fontSize: '13px', fontStyle: 'bold', color: '#ff8a6a', stroke: '#000', strokeThickness: 3, resolution: 2 }).setOrigin(0.5);
     }
   }
@@ -330,23 +343,27 @@ class ResultsScene extends Phaser.Scene {
   update(time, delta) { menuTick(this, delta); }
   create(res) {
     const c = G.career, pr = res.rows.find(r => r.isPlayer);
-    this.cameras.main.setScroll(-MX, 0);
+    uiCam(this, -MX);
     this.wonTitle = !!res.wonTitle;
     this.cameras.main.fadeIn(300, 0, 0, 0);
     // apply results to the career (once)
     if (!res.applied) {
       res.applied = true;
+      const before = [0, 1, 2, 3, 4, 5].filter(ti => tierUnlocked(c, ti)).length;
       c.money += pr.prize + res.cash + res.bounty;
       c.points += pr.points;
-      c.hp = Math.min(maxHp(c), res.hp); c.mines = res.mines; c.nitro = res.nitro;
+      res.unlocked = null;
+      c.hp = Math.min(maxHp(c), res.hp); c.mines = res.mines; c.nitro = res.nitro; if (c.bazooka) c.rockets = res.rockets;
       c.races++; c.kills += pr.kills;
       if (pr.place === 1 && !res.dead && !res.forfeit) c.wins++;
       res.rows.forEach(r => { if (!r.isPlayer) { const d = c.drivers.find(x => x.id === r.id); if (d) d.points += r.points; } });
       simulateOthers(c, res.offer.opp);
       c.raceNo++;
-      this.wonTitle = res.offer.diff === 3 && pr.place === 1 && !res.dead && !res.forfeit;
+      this.wonTitle = res.offer.diff === FINAL && pr.place === 1 && !res.dead && !res.forfeit;
       if (this.wonTitle) c.champion = true;
       res.wonTitle = this.wonTitle;
+      const after = [0, 1, 2, 3, 4, 5].filter(ti => tierUnlocked(c, ti)).length;
+      if (after > before) res.unlocked = STR.diff[after - 1];
       c.offers = makeOffers(c);
       Save.store(c);
     }
@@ -380,6 +397,10 @@ class ResultsScene extends Phaser.Scene {
     });
     const total = pr.prize + res.bounty + res.cash;
     this.totalT = this.add.text(x + 30, sy + 92, `${t('total')}: ${money(total)}`, { fontFamily: FONT, fontSize: '28px', color: '#7dff6a', stroke: '#000', strokeThickness: 4, resolution: 2 }).setOrigin(0, 0.5);
+    if (res.unlocked) {
+      const ut = this.add.text(UW / 2, sy + 128, `NEW RACES UNLOCKED: ${res.unlocked}!`, { fontFamily: FONT, fontSize: '26px', color: '#ffd36a', stroke: '#000', strokeThickness: 5, resolution: 2 }).setOrigin(0.5);
+      this.tweens.add({ targets: ut, scale: 1.08, yoyo: true, repeat: -1, duration: 450 });
+    }
     if (res.dead) this.add.text(x + 440, sy + 30, t('youWrecked'), { fontFamily: FONT_B, fontSize: '18px', fontStyle: 'bold', color: '#ff6a5a', resolution: 2 }).setOrigin(0, 0.5);
     if (won) {
       Sound.play('win');
@@ -409,7 +430,7 @@ class VictoryScene extends Phaser.Scene {
   update(time, delta) { menuTick(this, delta); }
   create() {
     const c = G.career;
-    this.cameras.main.setScroll(-MX, 0);
+    uiCam(this, -MX);
     bg(this);
     makeFxTextures(this);
     this.add.text(UW / 2, 170, t('victory'), { fontFamily: FONT, fontSize: '68px', color: '#ffe14a', stroke: '#5a2a00', strokeThickness: 10, resolution: 2 }).setOrigin(0.5);

@@ -96,7 +96,7 @@ const Sound = {
   play(name, v = 1) {
     if (!this.ctx || v <= 0.03) return;
     const now = performance.now();
-    const gap = name === 'gun' ? 55 : name === 'ricochet' ? 120 : 40;
+    const gap = name === 'gun' ? 55 : name === 'ricochet' ? 120 : name === 'flame' ? 110 : 40;
     if (this.last[name] && now - this.last[name] < gap) return;
     this.last[name] = now;
     switch (name) {
@@ -122,6 +122,8 @@ const Sound = {
       case 'lap': [660, 990].forEach((f, i) => this.tone(f, f, 0.12, 'triangle', 0.25 * v, i * 0.1)); break;
       case 'win': [523, 659, 784, 1047].forEach((f, i) => this.tone(f, f, 0.22, 'square', 0.16 * v, i * 0.13)); break;
       case 'backfire': this.noise(0.09, 700, 'lowpass', 0.7 * v); this.tone(160, 50, 0.08, 'square', 0.25 * v); break;
+      case 'flame': this.noise(0.14, 900, 'bandpass', 0.35 * v, 0.6); this.noise(0.12, 300, 'lowpass', 0.3 * v); break;
+      case 'rocket': this.noise(0.6, 1400, 'bandpass', 0.6 * v, 0.7); this.tone(260, 90, 0.5, 'sawtooth', 0.15 * v); break;
       case 'skid': this.noise(0.12, 1600, 'bandpass', 0.07 * v, 3); break;
     }
   },

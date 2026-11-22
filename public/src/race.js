@@ -8,6 +8,9 @@ const LITE = MOBILE_UI || LOW_MEM;          // phones: fewer particles/overlays 
 const CAM_ZOOM = MOBILE_UI ? 1.3 : 1.12, GUN_Z = 11;   // closer camera on phones
 const BULLET_SPEED = 1450, BULLET_LIFE = 0.42, FIRE_GAP = 0.085;
 const AMMO_BASE = 140, AMMO_MAX = 220;
+const FLAME_DPS = 48, FLAME_RANGE = 150, FLAME_CONE = 0.45, FLAME_BURN = 2.5, BURN_DPS = 7;
+const ROCKET_SPEED = 560, ROCKET_DMG = 55, ROCKET_SPLASH = 35, ROCKET_GAP = 1.3;
+const WEAPON_NAME = { mg: 'MG', flame: 'FLAME', rocket: 'ROCKET' };
 
 // ---------------- particle pool ----------------
 class FX {
@@ -65,6 +68,9 @@ class Car {
     this.idx = n.i; this.s = n.s; this.d = n.d; this.side = n.side; this.lapRaw = -1; this.total = this.s - scene.tr.len;
     this.finished = false; this.finishOrder = 0; this.dead = false; this.deadAt = 0; this.kills = 0;
     this.lastHit = null; this.lastHitT = -99; this.fireCd = 0; this.nitroT = 0; this.mineCd = 0; this.flashT = 0; this.shots = 0;
+    this.weapons = ['mg'].concat(o.flame ? ['flame'] : [], o.bazooka ? ['rocket'] : []); this.wsel = 0;
+    this.flameFuel = o.flame ? 100 : 0; this.rockets = o.bazooka ? (o.rockets || 0) : 0; this.rocketCd = 0;
+    this.burnT = 0; this.burnSrc = null; this.flameFx = 0; this.burnFx = 0;
     const S3 = CAR3[o.stats.shape];
     this.gunZ = S3.roofGun ? S3.cz + 1.8 : S3.bz1 + 1.6; this.gunX = S3.gunRoof ? S3.gunRoof[1] : S3.roofGun ? S3.cabTop[1][0] + 9 : S3.gun[1];
     this.fwd = 0; this.lat = 0; this.offroad = false; this.skidT = 0; this.smokeT = 0;
@@ -108,14 +114,14 @@ class RaceScene extends Phaser.Scene {
     this.time0 = 0; this.raceT = 0; this.count = this.demo ? 0 : 3.6; this.lastBeep = 4;
     this.finishCount = 0; this.deaths = 0; this.endT = -1; this.ended = false; this.paused = false;
     this.playerCash = 0; this.playerBounty = 0; this.touch = { left: false, right: false, brake: false, fire: false, mine: false, nitro: false, active: false };
-    this.mineEdge = false; this.nitroEdge = false;
+    this.mineEdge = false; this.nitroEdge = false; this.wpnEdge = false; this.rocketsLive = [];
 
     this.makeCars();
     for (let k = 0; k < 7; k++) this.spawnPickup(true);
     if (!this.demo) pruneCarSheets(this, this.cars.map(c => c.spr.texture.key).concat(G.career ? [carSheetKey(CARS[G.career.car].shape, PLAYER_COLOR)] : []));
 
     const cam = this.cameras.main;
-    cam.setZoom(CAM_ZOOM, CAM_ZOOM * VIEW_IY);          // tilted 2.5D view
+    cam.setZoom(CAM_ZOOM * RS, CAM_ZOOM * RS * VIEW_IY);          // tilted 2.5D view (RS: lower render resolution on phones)
     cam.setBounds(0, 0, this.tr.W, this.tr.H);
     const f = this.player || this.cars[0];
     this.camX = f.x; this.camY = f.y; cam.centerOn(this.camX, this.camY);
@@ -124,7 +130,7 @@ class RaceScene extends Phaser.Scene {
     if (!this.demo) {
       this.keys = this.input.keyboard.addKeys({
         up: 'UP', down: 'DOWN', left: 'LEFT', right: 'RIGHT', w: 'W', a: 'A', s: 'S', d: 'D',
-        fire: 'SPACE', fire2: 'J', mine: 'X', mine2: 'K', nitro: 'SHIFT', nitro2: 'L'
+        fire: 'SPACE', fire2: 'J', mine: 'X', mine2: 'K', nitro: 'SHIFT', nitro2: 'L', wpn: 'Q', w1: 'ONE', w2: 'TWO', w3: 'THREE'
       });
       this.input.keyboard.on('keydown-ESC', () => this.togglePause());
       this.input.keyboard.on('keydown-P', () => this.togglePause());
@@ -151,17 +157,19 @@ class RaceScene extends Phaser.Scene {
     // player starts at the back of the grid (more action), except in the final
     const entries = order.map(id => {
       const def = driverDef(id), dd = c && c.drivers.find(x => x.id === id);
-      // rivals' cars scale with the player's car so easy races stay easy
-      const d = this.offer.diff, cap = this.demo ? 3 : d === 0 ? c.car : d === 1 ? c.car + 1 : d === 2 ? c.car + 2 : 3;
-      const tier = Math.min(3, cap, dd ? dd.tier : def.tier), sk = def.skill;
-      const lvl = Math.min(3, Math.floor(sk * 2.6 + d * 0.35));
-      const stats = carStats(tier, { engine: lvl, tires: lvl, plating: Math.min(3, Math.floor(sk * 2.4)) }, Math.floor(sk * 2.5), 0.86 + sk * 0.12 + (d === 3 ? 0.04 : 0));
+      // rivals by race tier (see TIER_AI): car class, upgrades and pace; heavy weapons from HARD up
+      const d = this.offer.diff, T = TIER_AI[this.demo ? 2 : d], sk = def.skill; void dd;
+      const tier = id === 'baron' ? 3 : T.car;
+      const lvl = clamp(T.lvl + Math.round((sk - 0.6) * 3), 0, UP_MAX);
+      const stats = carStats(tier, { engine: lvl, tires: lvl, plating: lvl }, lvl, T.mult + (sk - 0.6) * 0.05);
       if (def.vis !== undefined) stats.shape = def.vis;
-      return { id, kit: id, name: def.name, color: def.color, stats, skill: sk, aggr: 0.3 + sk * 0.6, hp: stats.hp, ammo: 90 + Math.round(sk * 80), mines: sk > 0.6 ? 2 : 1, nitro: 1 + Math.round(sk * 2), invuln: this.demo };
+      const heavy = (d >= 2 && !this.demo && KITS[id]) ? KITS[id].heavy : null;
+      return { id, kit: id, name: def.name, color: def.color, stats, skill: sk, aggr: 0.3 + sk * 0.6, hp: stats.hp, ammo: 90 + Math.round(sk * 80), mines: sk > 0.6 ? 2 : 1, nitro: 1 + Math.round(sk * 2), invuln: this.demo,
+        flame: heavy === 'flame' || heavy === 'both', bazooka: heavy === 'rocket' || heavy === 'both', rockets: 2 + Math.floor(Math.min(d, 6) / 2) };
     });
     if (!this.demo) {
       const stats = carStats(c.car, c.up, c.mg);
-      entries.push({ id: 'player', name: t('you'), color: PLAYER_COLOR, stats, isPlayer: true, hp: c.hp, ammo: AMMO_BASE, mines: c.mines, nitro: c.nitro });
+      entries.push({ id: 'player', name: t('you'), color: PLAYER_COLOR, stats, isPlayer: true, hp: c.hp, ammo: AMMO_BASE, mines: c.mines, nitro: c.nitro, flame: !!c.flame, bazooka: !!c.bazooka, rockets: c.rockets || 0 });
     }
     entries.forEach((e, i) => this.cars.push(new Car(this, e, slots[i])));
     this.player = this.cars.find(x => x.isPlayer) || null;
@@ -202,6 +210,14 @@ class RaceScene extends Phaser.Scene {
     this.collideCars();
     for (const car of this.cars) this.trackCar(car, dt);
     this.updateBullets(dt);
+    this.updateRockets(dt);
+    for (const car of this.cars) {
+      if (car.burnT <= 0 || car.dead) continue;
+      car.burnT -= dt;
+      if (!car.invuln && !car.finished) this.damage(car, BURN_DPS * dt, car.burnSrc);
+      car.burnFx -= dt;
+      if (car.burnFx <= 0) { car.burnFx = LITE ? 0.12 : 0.05; this.fx.spawn('soft', car.x + rnd(-10, 10), car.y + rnd(-6, 6) - 12 * VIEW_K, { tint: pick([0xff8a1a, 0xffc040, 0xff4a10]), add: true, life: 0.35, s0: 0.4, s1: 0.1, a0: 0.9, vy: -50, depth: 21 }); }
+    }
     this.updateMines(dt);
     this.updatePickups(dt);
     this.updateFires(dt);
@@ -225,7 +241,12 @@ class RaceScene extends Phaser.Scene {
     if (k.left.isDown || k.a.isDown || tc.left) steer -= 1;
     if (k.right.isDown || k.d.isDown || tc.right) steer += 1;
     const mineNow = k.mine.isDown || k.mine2.isDown || tc.mine, nitroNow = k.nitro.isDown || k.nitro2.isDown || tc.nitro;
-    const ctl = { thr, steer, fire: k.fire.isDown || k.fire2.isDown || tc.fire, mine: mineNow && !this.mineEdge, nitro: nitroNow && !this.nitroEdge };
+    // weapon switching: Q (or the touch button) cycles, 1/2/3 pick directly
+    const wpnNow = k.wpn.isDown || tc.wpn;
+    if (wpnNow && !this.wpnEdge && car.weapons.length > 1) { car.wsel = (car.wsel + 1) % car.weapons.length; this.msg(WEAPON_NAME[car.weapons[car.wsel]], '#ffd36a'); Sound.play('click'); }
+    this.wpnEdge = wpnNow;
+    [k.w1, k.w2, k.w3].forEach((key, i) => { if (key.isDown && car.weapons[i] && car.wsel !== i) { car.wsel = i; this.msg(WEAPON_NAME[car.weapons[i]], '#ffd36a'); } });
+    const ctl = { thr, steer, fire: k.fire.isDown || k.fire2.isDown || tc.fire, mine: mineNow && !this.mineEdge, nitro: nitroNow && !this.nitroEdge, weapon: car.weapons[car.wsel] };
     this.mineEdge = mineNow; this.nitroEdge = nitroNow;
     return ctl;
   }
@@ -446,7 +467,12 @@ class RaceScene extends Phaser.Scene {
       const cosA = (rx * ca + ry * sa) / (dist || 1);
       if (dist < 360 && cosA > 0.982 && Math.random() < car.aggr * dt * 4) car.burstT = rnd(0.2, 0.5);
     }
-    ctl.fire = car.burstT > 0;
+    ctl.fire = car.burstT > 0; ctl.weapon = 'mg';
+    if (target) {
+      const rx = target.x - car.x, ry = target.y - car.y, dist = Math.hypot(rx, ry), cosA = (rx * ca + ry * sa) / (dist || 1);
+      if (car.flameFuel > 0 && dist < FLAME_RANGE - 10 && cosA > 0.86) { ctl.fire = true; ctl.weapon = 'flame'; }
+      else if (car.rockets > 0 && car.rocketCd <= 0 && dist > 170 && dist < 520 && cosA > 0.992 && Math.random() < dt * (1 + car.skill * 2)) { ctl.fire = true; ctl.weapon = 'rocket'; }
+    }
     car.mineCd -= dt;
     if (car.mines > 0 && car.mineCd <= 0 && this.raceT > 12) {
       for (const o of this.cars) {
@@ -468,9 +494,11 @@ class RaceScene extends Phaser.Scene {
 
   // ---------------- weapons ----------------
   weapons(car, ctl, dt) {
-    car.fireCd -= dt;
-    const ca = Math.cos(car.a), sa = Math.sin(car.a);
-    if (ctl.fire && car.ammo > 0 && car.fireCd <= 0) {
+    car.fireCd -= dt; car.rocketCd -= dt;
+    const ca = Math.cos(car.a), sa = Math.sin(car.a), wpn = ctl.weapon || 'mg';
+    if (ctl.fire && wpn === 'flame' && car.flameFuel > 0) this.fireFlame(car, dt, ca, sa);
+    if (ctl.fire && wpn === 'rocket' && car.rockets > 0 && car.rocketCd <= 0) this.fireRocket(car, ca, sa);
+    if (ctl.fire && wpn === 'mg' && car.ammo > 0 && car.fireCd <= 0) {
       car.fireCd = FIRE_GAP; car.ammo--;
       const spread = car.isPlayer ? 0.035 : 0.035 + (1 - car.skill) * 0.07;
       const a = car.a + rnd(-spread, spread), gx = car.x + ca * (car.gunX + 1), gy = car.y + sa * (car.gunX + 1);
@@ -500,6 +528,72 @@ class RaceScene extends Phaser.Scene {
       if (this.mines.length > 24) this.removeMine(this.mines[0]);
     }
     if (ctl.nitro && car.nitro > 0 && car.nitroT <= 0) { car.nitro--; car.nitroT = 2.2; this.sfx('nitro', car, 0.9); }
+  }
+
+  // flamethrower: short cone, continuous damage, sets targets on fire
+  fireFlame(car, dt, ca, sa) {
+    car.flameFuel = Math.max(0, car.flameFuel - 30 * dt);
+    const hz = car.gunZ * VIEW_K, gx = car.x + ca * (car.gunX + 2), gy = car.y + sa * (car.gunX + 2);
+    car.flameFx -= dt;
+    if (car.flameFx <= 0) {
+      car.flameFx = LITE ? 0.06 : 0.03;
+      for (let k = 0; k < (LITE ? 1 : 2); k++) {
+        const a = car.a + rnd(-0.22, 0.22), v = rnd(330, 430);
+        this.fx.spawn('soft', gx, gy - hz, { tint: pick([0xffd040, 0xff8a1a, 0xff5a10]), add: true, life: rnd(0.3, 0.42), s0: 0.25, s1: 1.1, a0: 0.95, vx: car.vx + Math.cos(a) * v, vy: car.vy + Math.sin(a) * v, drag: 2.5, depth: 13 });
+      }
+      if (!LITE && Math.random() < 0.3) this.fx.spawn('smoke', gx + ca * 90, gy + sa * 90 - hz, { tint: 0x2a2018, life: 0.9, s0: 0.3, s1: 0.9, a0: 0.35, vx: car.vx * 0.5, vy: car.vy * 0.5 - 25, depth: 21 });
+    }
+    for (const o of this.cars) {
+      if (o === car || o.dead || o.finished) continue;
+      const rx = o.x - car.x, ry = o.y - car.y, dist = Math.hypot(rx, ry);
+      if (dist > FLAME_RANGE || dist < 1) continue;
+      if (Math.acos(clamp((rx * ca + ry * sa) / dist, -1, 1)) > FLAME_CONE) continue;
+      if (!o.invuln) this.damage(o, FLAME_DPS * dt * (1 - dist / FLAME_RANGE * 0.4), car);
+      o.burnT = FLAME_BURN; o.burnSrc = car;
+    }
+    this.sfx('flame', car, car.isPlayer ? 0.7 : 0.5);
+  }
+
+  // bazooka: slow rocket with splash damage
+  fireRocket(car, ca, sa) {
+    car.rockets--; car.rocketCd = ROCKET_GAP;
+    const hz = car.gunZ * VIEW_K, x = car.x + ca * (car.gunX + 4), y = car.y + sa * (car.gunX + 4), sp = Math.max(0, car.fwd) + ROCKET_SPEED;
+    const spr = this.add.image(x, y - hz, 'rocket').setRotation(car.a).setDepth(12.5).setScale(1, 1 / VIEW_IY);
+    this.rocketsLive.push({ x, y, vx: ca * sp, vy: sa * sp, life: 1.8, owner: car, spr, hz, trail: 0 });
+    this.fx.spawn('soft', x, y - hz, { tint: 0xffc060, add: true, life: 0.12, s0: 1.2, s1: 0.4, a0: 1, depth: 13 });
+    for (let k = 0; k < (LITE ? 2 : 5); k++) this.fx.spawn('smoke', x - ca * 30, y - sa * 30 - hz, { tint: 0x8a8278, life: 0.8, s0: 0.3, s1: 1, a0: 0.5, vx: -ca * rnd(40, 90) + rnd(-20, 20), vy: -sa * rnd(40, 90) + rnd(-20, 20), depth: 13 });
+    if (car.isPlayer) this.cameras.main.shake(120, 0.004);
+    this.sfx('rocket', car, 0.9);
+  }
+  updateRockets(dt) {
+    const R = this.rocketsLive;
+    for (let i = R.length - 1; i >= 0; i--) {
+      const m = R[i];
+      m.x += m.vx * dt; m.y += m.vy * dt; m.life -= dt; m.trail -= dt;
+      m.spr.setPosition(m.x, m.y - m.hz);
+      if (m.trail <= 0) {
+        m.trail = LITE ? 0.06 : 0.025;
+        this.fx.spawn('soft', m.x, m.y - m.hz, { tint: 0xffa040, add: true, life: 0.1, s0: 0.35, s1: 0.1, a0: 0.9, depth: 12.4 });
+        this.fx.spawn('smoke', m.x, m.y - m.hz, { tint: 0x9a9288, life: LITE ? 0.6 : 1.0, s0: 0.18, s1: 0.7, a0: 0.45, vy: -10, depth: 12.3 });
+      }
+      let hit = null;
+      for (const c of this.cars) if (c !== m.owner && !c.dead && !c.finished && Math.hypot(c.x - m.x, c.y - m.y) < 22) { hit = c; break; }
+      const wall = !hit && nearest(this.tr, m.x, m.y).d > WALL - 6;
+      if (hit || wall || m.life <= 0) {
+        if (hit && !hit.invuln) this.damage(hit, ROCKET_DMG, m.owner);
+        this.explosion(m.x, m.y, 1.1);
+        for (const c of this.cars) {
+          if (c === hit) continue;
+          const dx = c.x - m.x, dy = c.y - m.y, dd = Math.hypot(dx, dy);
+          if (dd > 85) continue;
+          const f = 1 - dd / 85;
+          if (!c.dead && !c.invuln) this.damage(c, ROCKET_SPLASH * f, m.owner);
+          c.vx += dx / (dd || 1) * 260 * f; c.vy += dy / (dd || 1) * 260 * f; c.spin += rnd(-3, 3) * f;
+        }
+        if (hit) { hit.vx += m.vx * 0.25; hit.vy += m.vy * 0.25; hit.spin += rnd(-4, 4); }
+        m.spr.destroy(); R.splice(i, 1);
+      }
+    }
   }
 
   updateBullets(dt) {
@@ -575,7 +669,7 @@ class RaceScene extends Phaser.Scene {
       const dx = c.x - m.x, dy = c.y - m.y, d = Math.hypot(dx, dy);
       if (d > 60) continue;
       const f = 1 - d / 60;
-      if (!c.dead && !c.invuln) this.damage(c, 21 * f + 9, m.owner);
+      if (!c.dead && !c.invuln) this.damage(c, 26 * f + 11, m.owner);
       c.vx += dx / (d || 1) * 320 * f; c.vy += dy / (d || 1) * 320 * f; c.spin += rnd(-4, 4) * f;
     }
   }
@@ -584,7 +678,7 @@ class RaceScene extends Phaser.Scene {
     if (car.dead || car.finished || amount <= 0) return;
     car.hp -= amount;
     if (src && src !== car) { car.lastHit = src; car.lastHitT = this.raceT; }
-    if (car.isPlayer) this.events.emit('hurt', amount);
+    if (car.isPlayer && amount > 0.5) this.events.emit('hurt', amount);
     car.flashT = 0.07;
     if (car.hp <= 0) this.destroyCar(car);
   }
@@ -681,7 +775,7 @@ class RaceScene extends Phaser.Scene {
   }
   applyPickup(c, type) {
     if (type === 'cash') {
-      if (c.isPlayer) { const v = Math.round(rnd(40, 90) * [1, 1.6, 2.4, 3][this.offer.diff] / 5) * 5; this.playerCash += v; this.msg('+' + money(v), '#7dff6a'); Sound.play('cash'); }
+      if (c.isPlayer) { const v = Math.round(rnd(40, 90) * (1 + this.offer.diff * 0.5) / 5) * 5; this.playerCash += v; this.msg('+' + money(v), '#7dff6a'); Sound.play('cash'); }
     } else if (type === 'ammo') {
       c.ammo = Math.min(AMMO_MAX, c.ammo + 45); if (c.isPlayer) { this.msg(t('pkAmmo'), '#ffd36a'); Sound.play('pickup'); }
     } else if (type === 'fix') {
@@ -745,7 +839,7 @@ class RaceScene extends Phaser.Scene {
     if (forfeit) { const pr = rows.find(r => r.isPlayer); pr.prize = 0; pr.points = 0; }
     const p = this.player;
     const res = { offer: this.offer, rows, cash: forfeit ? 0 : this.playerCash, bounty: forfeit ? 0 : this.playerBounty,
-      hp: p.dead ? Math.round(p.maxHp * 0.12) : Math.max(1, Math.round(p.hp)), mines: p.mines, nitro: p.nitro, dead: p.dead, forfeit };
+      hp: p.dead ? Math.round(p.maxHp * 0.12) : Math.max(1, Math.round(p.hp)), mines: p.mines, nitro: p.nitro, rockets: p.rockets, dead: p.dead, forfeit };
     this.scene.stop('hud');
     this.cameras.main.fadeOut(350, 0, 0, 0);
     this.time.delayedCall(380, () => this.scene.start('results', res));
@@ -761,7 +855,7 @@ class HudScene extends Phaser.Scene {
   create() {
     // the HUD is built in a virtual area GW/z x GH/z and zoomed by z: bigger HUD and thumb buttons on phones
     const z = MOBILE_UI ? 1.32 : 1;
-    this.cameras.main.setOrigin(0, 0).setZoom(z);
+    this.cameras.main.setOrigin(0, 0).setZoom(z * RS);
     this.W = GW / z; this.H = GH / z;
     this.race = this.scene.get('race');
     this.input.addPointer(3);
@@ -777,8 +871,8 @@ class HudScene extends Phaser.Scene {
     this.cashT = txt(298, 98, '', 20, '#7dff6a').setOrigin(1, 0);
     this.hpG = this.add.graphics();
     this.ammoT = txt(30, 94, '', 18, '#ffd36a');
-    this.mineT = txt(112, 94, '', 18, '#ff9a8a');
-    this.nitroT = txt(180, 94, '', 18, '#ff8ae8');
+    this.mineT = txt(168, 94, '', 18, '#ff9a8a');
+    this.nitroT = txt(226, 94, '', 18, '#ff8ae8');
     // minimap
     const tr = this.race.tr, mw = 230, mh = 160;
     const sc = Math.min((mw - 20) / tr.W, (mh - 20) / tr.H);
@@ -851,7 +945,8 @@ class HudScene extends Phaser.Scene {
       { k: 'fire', x: this.W - 105, y: this.H - 115, r: 78, label: '●', sub: 'GUN' },
       { k: 'brake', x: this.W - 265, y: this.H - 70, r: 52, label: '▼', sub: 'BRAKE' },
       { k: 'nitro', x: this.W - 105, y: this.H - 270, r: 52, label: '⚡', sub: 'NITRO' },
-      { k: 'mine', x: this.W - 255, y: this.H - 200, r: 52, label: '✸', sub: 'MINE' }
+      { k: 'mine', x: this.W - 255, y: this.H - 200, r: 52, label: '✸', sub: 'MINE' },
+      { k: 'wpn', x: this.W - 225, y: this.H - 320, r: 42, label: '⟳', sub: 'WEAPON' }
     ];
     this.touchG = this.add.graphics();
     this.touchTxt = this.tbtn.map(b => [
@@ -920,7 +1015,8 @@ class HudScene extends Phaser.Scene {
     this.posT.setText(pos + '/' + rank.length);
     const lap = clamp(Math.floor(p.total / r.tr.len) + 1, 1, r.offer.laps);
     this.lapT.setText(lap + '/' + r.offer.laps);
-    this.ammoT.setText('▮' + p.ammo);
+    const w = p.weapons[p.wsel], wtxt = w === 'flame' ? `FLAME ${Math.round(p.flameFuel)}%` : w === 'rocket' ? `ROCKET ${p.rockets}` : `MG ${p.ammo}`;
+    if (this.ammoT._t !== wtxt) { this.ammoT._t = wtxt; this.ammoT.setText(wtxt); }
     this.mineT.setText('✸' + p.mines);
     this.nitroT.setText('⚡' + p.nitro + (p.nitroT > 0 ? '!' : ''));
     this.cashT.setText(r.playerCash + r.playerBounty > 0 ? '+' + money(r.playerCash + r.playerBounty) : '');

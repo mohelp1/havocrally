@@ -1456,6 +1456,12 @@ function makeFxTextures(scene) {
   add('spark', 32, 8, (g) => { const gr = g.createLinearGradient(0, 0, 32, 0); gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(1, 'rgba(255,255,255,1)'); g.fillStyle = gr; g.beginPath(); g.ellipse(16, 4, 16, 3, 0, 0, 7); g.fill(); });
   add('skid', 8, 8, (g) => { g.fillStyle = 'rgba(20,20,20,0.9)'; g.beginPath(); g.ellipse(4, 4, 4, 2.6, 0, 0, 7); g.fill(); });
   add('px', 4, 4, (g) => { g.fillStyle = '#fff'; g.fillRect(0, 0, 4, 4); });
+  add('rocket', 34, 12, (g) => {
+    g.fillStyle = '#3a3a36'; g.fillRect(4, 3, 22, 6);
+    g.fillStyle = '#6a6a62'; g.fillRect(4, 3, 22, 2);
+    g.fillStyle = '#b8321a'; g.beginPath(); g.moveTo(26, 3); g.lineTo(33, 6); g.lineTo(26, 9); g.closePath(); g.fill();
+    g.fillStyle = '#2a2a26'; g.beginPath(); g.moveTo(4, 3); g.lineTo(0, 0); g.lineTo(8, 3); g.closePath(); g.fill(); g.beginPath(); g.moveTo(4, 9); g.lineTo(0, 12); g.lineTo(8, 9); g.closePath(); g.fill();
+  });
   add('ring', 128, 128, (g) => { g.strokeStyle = '#fff'; g.lineWidth = 6; g.beginPath(); g.arc(64, 64, 58, 0, 7); g.stroke(); });
   add('mine', 40, 40, (g) => {
     g.fillStyle = 'rgba(0,0,0,0.35)'; g.beginPath(); g.arc(22, 23, 13, 0, 7); g.fill();
