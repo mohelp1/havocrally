@@ -130,7 +130,7 @@ class RaceScene extends Phaser.Scene {
     if (!this.demo) {
       this.keys = this.input.keyboard.addKeys({
         up: 'UP', down: 'DOWN', left: 'LEFT', right: 'RIGHT', w: 'W', a: 'A', s: 'S', d: 'D',
-        fire: 'SPACE', fire2: 'J', mine: 'X', mine2: 'K', nitro: 'SHIFT', nitro2: 'L', wpn: 'Q', w1: 'ONE', w2: 'TWO', w3: 'THREE'
+        fire: 'SPACE', fire2: 'J', mine: 'X', mine2: 'K', nitro: 'SHIFT', nitro2: 'L', wpn: 'Q', w1: 'ONE', w2: 'TWO', w3: 'THREE', flameKey: 'F', rocketKey: 'R'
       });
       this.input.keyboard.on('keydown-ESC', () => this.togglePause());
       this.input.keyboard.on('keydown-P', () => this.togglePause());
@@ -189,6 +189,7 @@ class RaceScene extends Phaser.Scene {
   update(time, delta) {
     if (this.paused) return;
     const dt = Math.min(delta / 1000, 1 / 30);
+    this.dtNow = dt;
     this.raceT += dt;
     if (this.count > 0) {
       this.count -= dt;
@@ -237,7 +238,15 @@ class RaceScene extends Phaser.Scene {
     let thr = 0, steer = 0;
     if (k.up.isDown || k.w.isDown) thr += 1;
     if (k.down.isDown || k.s.isDown) thr -= 1;
-    if (tc.active) thr = tc.brake ? -1 : 1;
+    if (tc.active) {                        // phones: automatic throttle, backs up by itself when stuck
+      const dt = this.dtNow || 1 / 60;
+      if (car.touchRev > 0) { car.touchRev -= dt; thr = -1; }
+      else {
+        thr = 1;
+        car.touchStuck = (this.count <= 0 && Math.abs(car.fwd) < 25) ? (car.touchStuck || 0) + dt : 0;
+        if (car.touchStuck > 0.9) { car.touchStuck = 0; car.touchRev = 0.75; }
+      }
+    }
     if (k.left.isDown || k.a.isDown || tc.left) steer -= 1;
     if (k.right.isDown || k.d.isDown || tc.right) steer += 1;
     const mineNow = k.mine.isDown || k.mine2.isDown || tc.mine, nitroNow = k.nitro.isDown || k.nitro2.isDown || tc.nitro;
@@ -247,6 +256,14 @@ class RaceScene extends Phaser.Scene {
     this.wpnEdge = wpnNow;
     [k.w1, k.w2, k.w3].forEach((key, i) => { if (key.isDown && car.weapons[i] && car.wsel !== i) { car.wsel = i; this.msg(WEAPON_NAME[car.weapons[i]], '#ffd36a'); } });
     const ctl = { thr, steer, fire: k.fire.isDown || k.fire2.isDown || tc.fire, mine: mineNow && !this.mineEdge, nitro: nitroNow && !this.nitroEdge, weapon: car.weapons[car.wsel] };
+    if (tc.active) {                        // touch buttons fire their own weapon (no switching on phones)
+      if (tc.rocket && car.rockets > 0) { ctl.fire = true; ctl.weapon = 'rocket'; }
+      else if (tc.flame && car.flameFuel > 0) { ctl.fire = true; ctl.weapon = 'flame'; }
+      else if (tc.fire) { ctl.fire = true; ctl.weapon = 'mg'; }
+    }
+    // desktop shortcuts: F = flamethrower, R = rocket
+    if (k.flameKey.isDown && car.flameFuel > 0) { ctl.fire = true; ctl.weapon = 'flame'; }
+    if (k.rocketKey.isDown && car.rockets > 0) { ctl.fire = true; ctl.weapon = 'rocket'; }
     this.mineEdge = mineNow; this.nitroEdge = nitroNow;
     return ctl;
   }
@@ -942,12 +959,12 @@ class HudScene extends Phaser.Scene {
     this.tbtn = [
       { k: 'left', x: 100, y: this.H - 105, r: 74, label: '◀' },
       { k: 'right', x: 268, y: this.H - 105, r: 74, label: '▶' },
-      { k: 'fire', x: this.W - 105, y: this.H - 115, r: 78, label: '●', sub: 'GUN' },
-      { k: 'brake', x: this.W - 265, y: this.H - 70, r: 52, label: '▼', sub: 'BRAKE' },
-      { k: 'nitro', x: this.W - 105, y: this.H - 270, r: 52, label: '⚡', sub: 'NITRO' },
-      { k: 'mine', x: this.W - 255, y: this.H - 200, r: 52, label: '✸', sub: 'MINE' },
-      { k: 'wpn', x: this.W - 225, y: this.H - 320, r: 42, label: '⟳', sub: 'WEAPON' }
-    ];
+      { k: 'fire', x: this.W - 105, y: this.H - 115, r: 78, label: '●', sub: 'GUN', has: p => p.ammo > 0 },
+      { k: 'flame', x: this.W - 268, y: this.H - 82, r: 58, label: '🔥', sub: 'FLAME', has: p => p.flameFuel > 0 },
+      { k: 'rocket', x: this.W - 112, y: this.H - 272, r: 56, label: '➤', sub: 'ROCKET', has: p => p.rockets > 0 },
+      { k: 'mine', x: this.W - 262, y: this.H - 232, r: 52, label: '✸', sub: 'MINE', has: p => p.mines > 0 },
+      { k: 'nitro', x: this.W - 400, y: this.H - 82, r: 52, label: '⚡', sub: 'NITRO', has: p => p.nitro > 0 && p.nitroT <= 0 }
+    ];   // buttons are only shown when the player actually has that weapon / item
     this.touchG = this.add.graphics();
     this.touchTxt = this.tbtn.map(b => [
       this.add.text(b.x, b.y - (b.sub ? 6 : 0), b.label, { fontFamily: FONT_B, fontSize: Math.round(b.r * 0.6) + 'px', color: '#ffffff', resolution: 2 }).setOrigin(0.5).setAlpha(0.85),
@@ -956,19 +973,20 @@ class HudScene extends Phaser.Scene {
     this.input.on('pointerdown', p => { if (p.wasTouch) { this.touchOn = true; G.touch = true; } });
   }
   updateTouch() {
-    const tc = this.race.touch, on = this.touchOn && !this.race.paused;
+    const tc = this.race.touch, on = this.touchOn && !this.race.paused, pl = this.race.player;
     tc.active = this.touchOn;
     const g = this.touchG; g.clear();
-    this.touchTxt.forEach(arr => arr.forEach(o => o && o.setVisible(on)));
+    const avail = b => !b.has || (pl && !pl.dead && !pl.finished && b.has(pl));
+    this.tbtn.forEach((b, i) => this.touchTxt[i].forEach(o => o && o.setVisible(on && avail(b))));
     const state = {};
     if (on) for (const p of this.input.manager.pointers) {
       if (!p.isDown) continue;
       const wp = this.cameras.main.getWorldPoint(p.x, p.y);
-      for (const b of this.tbtn) if (Math.hypot(wp.x - b.x, wp.y - b.y) < b.r * 1.25) state[b.k] = true;
+      for (const b of this.tbtn) if (avail(b) && Math.hypot(wp.x - b.x, wp.y - b.y) < b.r * 1.25) state[b.k] = true;
     }
     for (const b of this.tbtn) {
       tc[b.k] = !!state[b.k];
-      if (!on) continue;
+      if (!on || !avail(b)) continue;
       g.fillStyle(state[b.k] ? 0xffe14a : 0x000000, state[b.k] ? 0.45 : 0.32).fillCircle(b.x, b.y, b.r);
       g.lineStyle(3, 0xffffff, 0.5).strokeCircle(b.x, b.y, b.r);
     }

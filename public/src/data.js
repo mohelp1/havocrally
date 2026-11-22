@@ -30,8 +30,8 @@ function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.fl
 const STR = {
     subtitle: 'Gasoline. Guns. Glory.',
     play: 'PLAY', cont: 'CONTINUE', newCareer: 'NEW CAREER', sure: 'REALLY DELETE?',
-    controls: 'Arrows / WASD – drive   ·   Space – fire   ·   Q – switch weapon   ·   X – mine   ·   Shift – nitro   ·   Esc – pause',
-    controlsTouch: 'Touch controls: ◀ ▶ to steer, throttle is automatic',
+    controls: 'Arrows / WASD – drive   ·   Space – fire   ·   Q – switch weapon   ·   F – flame   ·   R – rocket   ·   X – mine   ·   Shift – nitro   ·   Esc – pause',
+    controlsTouch: 'Touch: ◀ ▶ steer, throttle is automatic, weapon buttons fire directly',
     garage: 'SCRAP GARAGE', points: 'Points', raceNo: 'Race #{0}',
     speed: 'Top speed', accel: 'Acceleration', handling: 'Handling', armor: 'Armor', condition: 'Condition',
     repair: 'REPAIR  {0}', repaired: 'ALL GOOD', repairAd: '▶ FREE REPAIR',
@@ -60,7 +60,7 @@ const STR = {
     carDesc: ['Rusty little bug with a spiked bumper. Runs on hope.', 'Blown hot-rod coupe. Loud, fast and angry.', 'Low wedge with a wing and a supercharger. Sticks to the sand.', 'Scrap-plated war truck. Ramming it is a mistake.'],
     upDesc: { engine: 'top speed & acceleration', tires: 'grip & steering', plating: 'car durability', mg: 'machine gun damage', mines: 'pack of 3 mines', nitro: 'one nitro charge',
       flame: 'short range, sets cars on fire', bazooka: 'slow rockets, huge damage', rockets: 'pack of 2 rockets' },
-    flame: 'Flamethrower', bazooka: 'Bazooka', rockets: 'Rockets', owned: 'OWNED',
+    flame: 'Flamethrower', bazooka: 'Bazooka', rockets: 'Rockets', ownedW: 'OWNED', standingsBtn: 'STANDINGS', back: 'BACK',
 };
 function t(k, ...a) {
   let s = STR[k]; if (s === undefined) return k;

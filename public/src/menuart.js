@@ -217,21 +217,56 @@ function chainSprite(scene, x0, y0, x1, y1) {
 function rivet(g, x, y, r = 3) { g.fillStyle(0x1a120c, 0.8).fillCircle(x + 1, y + 1, r); g.fillStyle(0x9a8a72, 1).fillCircle(x, y, r); g.fillStyle(0xe0d4bc, 0.8).fillCircle(x - r * 0.35, y - r * 0.35, r * 0.35); }
 
 // rusted metal plate with rivets (and optional spikes on top)
+// canvas helpers for cached UI textures (Graphics objects are re-tessellated every frame -> slow menus on phones)
+function cRivet(g, x, y, r = 3) {
+  g.fillStyle = 'rgba(26,18,12,0.8)'; g.beginPath(); g.arc(x + 1, y + 1, r, 0, 7); g.fill();
+  g.fillStyle = '#9a8a72'; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+  g.fillStyle = 'rgba(224,212,188,0.8)'; g.beginPath(); g.arc(x - r * 0.35, y - r * 0.35, r * 0.35, 0, 7); g.fill();
+}
+function cSpikes(g, x, y, w, n, h, dir) {
+  const step = w / n, b = step * 0.34;
+  for (let i = 0; i < n; i++) {
+    const cx = x + (i + 0.5) * step, ty = y + dir * h;
+    g.fillStyle = '#bdb6a6'; g.beginPath(); g.moveTo(cx - b, y); g.lineTo(cx, y); g.lineTo(cx, ty); g.closePath(); g.fill();
+    g.fillStyle = '#6a645a'; g.beginPath(); g.moveTo(cx, y); g.lineTo(cx + b, y); g.lineTo(cx, ty); g.closePath(); g.fill();
+    g.strokeStyle = 'rgba(26,20,16,0.8)'; g.lineWidth = 1; g.beginPath(); g.moveTo(cx - b, y); g.lineTo(cx, ty); g.lineTo(cx + b, y); g.stroke();
+  }
+}
+function cRound(g, x, y, w, h, r) {
+  g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
+}
+// rusted metal plate (optional title bar, spikes) baked into one cached texture
 function rustPlate(scene, x, y, w, h, o = {}) {
-  const g = scene.add.graphics();
-  g.fillStyle(0x000000, 0.45).fillRect(x + 5, y + 7, w, h);
-  g.fillStyle(0x2a211a, 1).fillRect(x, y, w, h);
-  const ts = scene.add.tileSprite(x + 3, y + 3, w - 6, h - 6, 'rustplate').setOrigin(0).setAlpha(o.alpha === undefined ? 0.75 : o.alpha);
-  const g2 = scene.add.graphics();
-  g2.fillStyle(0x0e0a07, o.dim === undefined ? 0.45 : o.dim).fillRect(x + 3, y + 3, w - 6, h - 6);
-  g2.lineStyle(3, 0x6a4a30, 1).strokeRect(x, y, w, h);
-  g2.lineStyle(1, 0x000000, 0.7).strokeRect(x + 3, y + 3, w - 6, h - 6);
-  for (const rx of [x + 9, x + w - 9]) for (const ry of [y + 9, y + h - 9]) rivet(g2, rx, ry);
-  if (w > 300) for (let k = 1; k < 4; k++) { rivet(g2, x + k * w / 4, y + 9, 2.5); rivet(g2, x + k * w / 4, y + h - 9, 2.5); }
-  if (o.spikes) drawSpikes(g2, x + 14, y, w - 28, Math.max(3, Math.round(w / 34)), 12, -1);
-  if (o.spikesBottom) drawSpikes(g2, x + 14, y + h, w - 28, Math.max(3, Math.round(w / 34)), 10, 1);
-  if (o.depth !== undefined) { g.setDepth(o.depth); ts.setDepth(o.depth); g2.setDepth(o.depth); }
-  return { g, ts, g2 };
+  w = Math.round(w); h = Math.round(h);
+  const PT = 14, al = o.alpha === undefined ? 0.75 : o.alpha, dim = o.dim === undefined ? 0.45 : o.dim;
+  const key = `plate_${w}_${h}_${o.spikes ? 1 : 0}${o.spikesBottom ? 1 : 0}${o.title ? 1 : 0}_${Math.round(al * 100)}_${Math.round(dim * 100)}`;
+  if (!scene.textures.exists(key)) {
+    const cv = makeCanvas(w + 8, h + PT * 2), g = cv.getContext('2d'), oy = PT;
+    g.fillStyle = 'rgba(0,0,0,0.45)'; g.fillRect(5, oy + 7, w, h);
+    g.fillStyle = '#2a211a'; g.fillRect(0, oy, w, h);
+    g.save(); g.globalAlpha = al; g.translate(3, oy + 3); g.fillStyle = g.createPattern(scene.textures.get('rustplate').getSourceImage(), 'repeat'); g.fillRect(0, 0, w - 6, h - 6); g.restore();
+    g.fillStyle = `rgba(14,10,7,${dim})`; g.fillRect(3, oy + 3, w - 6, h - 6);
+    g.strokeStyle = '#6a4a30'; g.lineWidth = 3; g.strokeRect(1.5, oy + 1.5, w - 3, h - 3);
+    g.strokeStyle = 'rgba(0,0,0,0.7)'; g.lineWidth = 1; g.strokeRect(3.5, oy + 3.5, w - 7, h - 7);
+    if (o.title) {
+      g.fillStyle = 'rgba(20,13,8,0.88)'; g.fillRect(3, oy + 3, w - 6, 46);
+      g.strokeStyle = '#6a4a30'; g.lineWidth = 2; g.beginPath(); g.moveTo(3, oy + 49); g.lineTo(w - 3, oy + 49); g.stroke();
+      if (!o.noStripes) for (let k = 0; k < 6; k++) {
+        const hx = w - 130 + k * 16;
+        g.fillStyle = k % 2 ? 'rgba(26,20,16,0.9)' : 'rgba(201,154,28,0.9)';
+        g.beginPath(); g.moveTo(hx, oy + 45); g.lineTo(hx + 16, oy + 45); g.lineTo(hx + 27, oy + 7); g.lineTo(hx + 11, oy + 7); g.closePath(); g.fill();
+      }
+      cRivet(g, 12, oy + 26); cRivet(g, w - 12, oy + 26);
+    }
+    for (const rx of [9, w - 9]) for (const ry of [oy + 9, oy + h - 9]) cRivet(g, rx, ry);
+    if (w > 300) for (let k = 1; k < 4; k++) { cRivet(g, k * w / 4, oy + 9, 2.5); cRivet(g, k * w / 4, oy + h - 9, 2.5); }
+    if (o.spikes) cSpikes(g, 14, oy, w - 28, Math.max(3, Math.round(w / 34)), 12, -1);
+    if (o.spikesBottom) cSpikes(g, 14, oy + h, w - 28, Math.max(3, Math.round(w / 34)), 10, 1);
+    scene.textures.addCanvas(key, cv);
+  }
+  const img = scene.add.image(x, y - PT, key).setOrigin(0, 0);
+  if (o.depth !== undefined) img.setDepth(o.depth);
+  return { img };
 }
 
 // ---------------- ambience: fire particles, embers, burning wrecks, buggies ----------------

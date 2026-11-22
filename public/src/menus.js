@@ -12,21 +12,31 @@ function mixInt(col, f) {
 const uiCam = (scene, scrollX = 0) => scene.cameras.main.setOrigin(0, 0).setZoom(RS).setScroll(scrollX, 0);
 const hexStr = col => '#' + col.toString(16).padStart(6, '0');
 
+// button background baked into a cached canvas texture per size/colour/state (cheap to render)
+function btnTexture(scene, w, h, color, state) {
+  const key = `btn_${w}_${h}_${color.toString(16)}_${state}`;
+  if (scene.textures.exists(key)) return key;
+  const P = 6, cv = makeCanvas(w + P * 2, h + P * 2 + 4), g = cv.getContext('2d');
+  const on = state !== 'x', cc = on ? color : 0x4a4a4a, dy = state === 'd' ? 2 : 0;
+  cRound(g, P + 2, P + 5, w, h, 12); g.fillStyle = 'rgba(0,0,0,0.45)'; g.fill();
+  cRound(g, P, P + dy, w, h, 12); g.fillStyle = hexStr(mixInt(cc, state === 'h' ? 0.18 : 0)); g.fill();
+  cRound(g, P + 4, P + 3 + dy, w - 8, h * 0.4, 9); g.fillStyle = `rgba(255,255,255,${on ? 0.18 : 0.06})`; g.fill();
+  cRound(g, P, P + dy, w, h, 12); g.strokeStyle = 'rgba(0,0,0,0.55)'; g.lineWidth = 2; g.stroke();
+  if (w >= 120) { cRivet(g, P + 9, P + h / 2 + dy, 2.5); cRivet(g, P + w - 9, P + h / 2 + dy, 2.5); }
+  scene.textures.addCanvas(key, cv);
+  return key;
+}
 function makeButton(scene, x, y, w, h, label, cb, o = {}) {
+  w = Math.round(w); h = Math.round(h);
   const c = scene.add.container(x, y);
-  const g = scene.add.graphics();
   const col = o.color === undefined ? 0xd8262e : o.color;
+  const bgImg = scene.add.image(0, 0, btnTexture(scene, w, h, col, 'n')).setOrigin(0.5, (6 + h / 2) / (h + 16));
   const txt = scene.add.text(0, 1, label, { fontFamily: FONT, fontSize: (o.size || Math.round(Math.min(28, h * 0.42))) + 'px', color: '#ffffff', stroke: '#000', strokeThickness: 3, resolution: 2, align: 'center' }).setOrigin(0.5);
-  c.add([g, txt]);
+  c.add([bgImg, txt]);
   let enabled = !o.disabled, hover = false, down = false;
   const draw = () => {
-    g.clear();
-    const cc = enabled ? col : 0x4a4a4a, dy = down ? 2 : 0;
-    g.fillStyle(0x000000, 0.45).fillRoundedRect(-w / 2 + 2, -h / 2 + 5, w, h, 12);
-    g.fillStyle(mixInt(cc, hover && enabled ? 0.18 : 0), 1).fillRoundedRect(-w / 2, -h / 2 + dy, w, h, 12);
-    g.fillStyle(0xffffff, enabled ? 0.18 : 0.06).fillRoundedRect(-w / 2 + 4, -h / 2 + 3 + dy, w - 8, h * 0.4, 9);
-    g.lineStyle(2, 0x000000, 0.55).strokeRoundedRect(-w / 2, -h / 2 + dy, w, h, 12);
-    txt.setAlpha(enabled ? 1 : 0.55); txt.y = 1 + dy;
+    bgImg.setTexture(btnTexture(scene, w, h, col, !enabled ? 'x' : down ? 'd' : hover ? 'h' : 'n'));
+    txt.setAlpha(enabled ? 1 : 0.55); txt.y = 1 + (down ? 2 : 0);
   };
   c.setSize(w, h).setInteractive({ useHandCursor: true });
   c.on('pointerover', () => { hover = true; draw(); });
@@ -38,25 +48,27 @@ function makeButton(scene, x, y, w, h, label, cb, o = {}) {
   draw();
   return c;
 }
+// race card background (also a cached texture)
+function raceCardTexture(scene, w, h, color, boss) {
+  const key = `card_${w}_${h}_${color.toString(16)}_${boss ? 1 : 0}`;
+  if (scene.textures.exists(key)) return key;
+  const cv = makeCanvas(w + 6, h + 20), g = cv.getContext('2d'), oy = 12;
+  cSpikes(g, 24, oy, w - 48, Math.round(w / 40), 10, -1);
+  cRound(g, 3, oy + 5, w, h, 14); g.fillStyle = 'rgba(0,0,0,0.35)'; g.fill();
+  cRound(g, 0, oy, w, h, 14); g.fillStyle = boss ? 'rgba(42,12,12,0.96)' : 'rgba(27,24,22,0.95)'; g.fill();
+  g.save(); cRound(g, 0, oy, w, h, 14); g.clip(); g.fillStyle = hexStr(color); g.fillRect(0, oy, w, 44); g.restore();
+  cRound(g, 1.5, oy + 1.5, w - 3, h - 3, 13); g.strokeStyle = hexStr(color); g.lineWidth = 3; g.stroke();
+  scene.textures.addCanvas(key, cv);
+  return key;
+}
 function makeSoundButton(scene, x, y) {
   const lab = () => (Sound.muted ? 'SOUND: OFF' : 'SOUND: ON');
   const b = makeButton(scene, x, y, 220, 46, lab(), () => { Sound.toggle(); b.setLabel(lab()); }, { color: 0x4a3f36, size: 18 });
   return b;
 }
 function panel(scene, x, y, w, h, title, o = {}) {
-  const parts = rustPlate(scene, x, y, w, h, o);
-  if (title) {
-    const g = scene.add.graphics();
-    g.fillStyle(0x140d08, 0.85).fillRect(x + 3, y + 3, w - 6, 37);
-    g.lineStyle(2, 0x6a4a30, 1).lineBetween(x + 3, y + 40, x + w - 3, y + 40);
-    for (let k = 0; k < 6; k++) {          // hazard stripes at the right end of the title bar
-      const hx = x + w - 120 + k * 15;
-      g.fillStyle(k % 2 ? 0x1a1410 : 0xc99a1c, 0.9).fillPoints([{ x: hx, y: y + 37 }, { x: hx + 15, y: y + 37 }, { x: hx + 25, y: y + 6 }, { x: hx + 10, y: y + 6 }], true);
-    }
-    rivet(g, x + 12, y + 21); rivet(g, x + w - 12, y + 21);
-    const tt = scene.add.text(x + 26, y + 21, title, { fontFamily: FONT, fontSize: '19px', color: '#ffb52a', stroke: '#000', strokeThickness: 3, resolution: 2 }).setOrigin(0, 0.5);
-    parts.title = [g, tt];
-  }
+  const parts = rustPlate(scene, x, y, w, h, { ...o, title: !!title });
+  if (title) parts.title = scene.add.text(x + 26, y + 26, title, { fontFamily: FONT, fontSize: '26px', color: '#ffb52a', stroke: '#000', strokeThickness: 4, resolution: 2 }).setOrigin(0, 0.5);
   return parts;
 }
 function bg(scene) { menuBackdrop(scene); }
@@ -64,13 +76,11 @@ function toast(scene, text, color = '#ff5a4a') {
   const tt = scene.add.text(UW / 2, GH / 2, text, { fontFamily: FONT, fontSize: '40px', color, stroke: '#000', strokeThickness: 6, resolution: 2 }).setOrigin(0.5).setDepth(500);
   scene.tweens.add({ targets: tt, y: GH / 2 - 60, alpha: 0, duration: 1100, delay: 300, onComplete: () => tt.destroy() });
 }
-function statBar(scene, x, y, w, label, f, f2) {
-  const g = scene.add.graphics();
-  scene.add.text(x, y, label, { fontFamily: FONT_B, fontSize: '15px', fontStyle: 'bold', color: '#c8c8d0', resolution: 2 }).setOrigin(0, 0.5);
-  const bx = x + 120, bw = w - 120;
-  g.fillStyle(0x000000, 0.6).fillRoundedRect(bx, y - 7, bw, 14, 5);
-  if (f2 !== undefined && f2 > f) g.fillStyle(0x7dff6a, 0.45).fillRoundedRect(bx + 1, y - 6, Math.max(3, (bw - 2) * clamp(f2, 0, 1)), 12, 4);
-  g.fillStyle(0xffb52a, 1).fillRoundedRect(bx + 1, y - 6, Math.max(3, (bw - 2) * clamp(f, 0, 1)), 12, 4);
+function statBar(scene, x, y, w, label, f) {
+  scene.add.text(x, y, label, { fontFamily: FONT_B, fontSize: '20px', fontStyle: 'bold', color: '#d0c8c0', resolution: 2 }).setOrigin(0, 0.5);
+  const g = scene.add.graphics(), bx = x + 150, bw = w - 150;
+  g.fillStyle(0x000000, 0.6).fillRect(bx, y - 8, bw, 16);
+  g.fillStyle(0xffb52a, 1).fillRect(bx + 2, y - 6, Math.max(3, (bw - 4) * clamp(f, 0, 1)), 12);
   return g;
 }
 const STAT_MAX = (() => { const s = carStats(3, { engine: 3, tires: 3, plating: 3 }, 0); return { speed: s.speed, accel: s.accel, handling: s.turn * s.grip, hp: s.hp }; })();
@@ -107,7 +117,7 @@ class TitleScene extends Phaser.Scene {
     menuAmbience(this, [], true);
     const cg = this.add.graphics();
     chainSprite(this, 95, -10, 120, 52); chainSprite(this, 505, -10, 480, 52);
-    rustPlate(this, 50, 48, 500, 285, { spikes: true, spikesBottom: true, alpha: 0.85, dim: 0.25 });
+    rustPlate(this, 50, 48, 500, 285, { spikes: true, spikesBottom: true, alpha: 0.85, dim: 0.25 });   // cached texture
     const hook = this.add.graphics(); rivet(hook, 120, 58, 5); rivet(hook, 480, 58, 5);
     this.add.image(GW - 170, 618, 'bonepile').setScale(1.05).setDepth(5);
     this.add.image(GW - 55, 470, 'skullpike').setScale(0.95).setDepth(4).setAngle(4);
@@ -153,122 +163,119 @@ class GarageScene extends Phaser.Scene {
     const c = G.career;
     bg(this);
     // header
-    rustPlate(this, -MX - 4, -4, GW + 8, 68, { spikesBottom: true, dim: 0.35 });
-    this.add.text(24, 32, t('garage'), { fontFamily: FONT, fontSize: '32px', color: '#ffb52a', resolution: 2 }).setOrigin(0, 0.5);
-    this.add.text(345, 32, money(c.money), { fontFamily: FONT, fontSize: '30px', color: '#7dff6a', stroke: '#000', strokeThickness: 3, resolution: 2 }).setOrigin(0, 0.5);
-    this.add.text(545, 32, `${t('points')}: ${c.points} / ${BOSS_POINTS}`, { fontFamily: FONT, fontSize: '22px', color: '#ffffff', resolution: 2 }).setOrigin(0, 0.5);
-    this.add.text(820, 32, t('raceNo', c.raceNo), { fontFamily: FONT, fontSize: '20px', color: '#aab', resolution: 2 }).setOrigin(0, 0.5);
-    const sb = makeButton(this, UW - 70, 32, 110, 40, Sound.muted ? '🔇 OFF' : '🔊 ON', () => { Sound.toggle(); sb.setLabel(Sound.muted ? '🔇 OFF' : '🔊 ON'); }, { color: 0x4a3f36, size: 16 });
-    makeButton(this, UW - 190, 32, 110, 40, 'MENU', () => this.scene.start('title'), { color: 0x4a3f36, size: 16 });
-    this.buildCar(c); this.buildShop(c); this.buildRanking(c); this.buildRaces(c);
-    const cg = this.add.graphics();
-    chainSprite(this, 430, 66, 430, 560); chainSprite(this, 850, 66, 850, 560);
-    rivet(cg, 430, 70, 4); rivet(cg, 850, 70, 4);
+    rustPlate(this, -MX - 4, -4, GW + 8, 84, { spikesBottom: true, dim: 0.35 });
+    this.add.text(20, 40, t('garage'), { fontFamily: FONT, fontSize: '31px', color: '#ffb52a', stroke: '#000', strokeThickness: 4, resolution: 2 }).setOrigin(0, 0.5);
+    this.add.text(330, 40, money(c.money), { fontFamily: FONT, fontSize: '34px', color: '#7dff6a', stroke: '#000', strokeThickness: 4, resolution: 2 }).setOrigin(0, 0.5);
+    this.add.text(520, 26, `${t('points')}: ${c.points} / ${BOSS_POINTS}`, { fontFamily: FONT, fontSize: '25px', color: '#ffffff', stroke: '#000', strokeThickness: 3, resolution: 2 }).setOrigin(0, 0.5);
+    const next = TIER_UNLOCK.findIndex((p, ti) => ti > 0 && c.points < p);
+    const hint = next > 0 ? t('tierLocked', STR.diff[next], TIER_UNLOCK[next]) : (!c.champion && c.points < BOSS_POINTS ? t('bossLocked', BOSS_POINTS) : '');
+    if (hint) this.add.text(520, 60, hint, { fontFamily: FONT_B, fontSize: '18px', fontStyle: 'bold', color: '#ffd36a', stroke: '#000', strokeThickness: 3, resolution: 2 }).setOrigin(0, 0.5);
+    makeButton(this, 905, 40, 200, 58, t('standingsBtn'), () => this.showStandings(), { color: 0x7a5228, size: 22 });
+    makeButton(this, 1072, 40, 120, 58, 'MENU', () => this.scene.start('title'), { color: 0x4a3f36, size: 22 });
+    const sb = makeButton(this, 1204, 40, 128, 58, Sound.muted ? '🔇 OFF' : '🔊 ON', () => { Sound.toggle(); sb.setLabel(Sound.muted ? '🔇 OFF' : '🔊 ON'); }, { color: 0x4a3f36, size: 20 });
+    this.buildCar(c); this.buildShop(c); this.buildRaces(c);
+    chainSprite(this, 450, 84, 450, 528);
   }
 
   buildCar(c) {
-    const x = 20, y = 80, w = 400, h = 470;
+    const x = 14, y = 98, w = 428, h = 420;
     panel(this, x, y, w, h, CARS[c.car].name.toUpperCase());
     const st = carStats(c.car, c.up, c.mg);
-    this.add.image(x + w / 2 + 10, y + 166, 'soft').setTint(0x000000).setAlpha(0.5).setScale(3.4, 1.3).setDepth(0.5);
-    addCarImage(this, x + w / 2, y + 160, st.shape, PLAYER_COLOR, 1.75, 0.5).setDepth(1);   // static showcase angle
+    this.add.image(x + w / 2 + 10, y + 150, 'soft').setTint(0x000000).setAlpha(0.5).setScale(3, 1.1).setDepth(0.5);
+    addCarImage(this, x + w / 2, y + 144, st.shape, PLAYER_COLOR, 1.45, 0.5).setDepth(1);   // static showcase angle
     const fr = statFracs(st);
-    statBar(this, x + 24, y + 236, w - 48, t('speed'), fr.speed);
-    statBar(this, x + 24, y + 264, w - 48, t('accel'), fr.accel);
-    statBar(this, x + 24, y + 292, w - 48, t('handling'), fr.handling);
-    statBar(this, x + 24, y + 320, w - 48, t('armor'), fr.hp);
-    // condition
+    [['speed', fr.speed], ['accel', fr.accel], ['handling', fr.handling], ['armor', fr.hp]].forEach(([k, v], j) => statBar(this, x + 22, y + 198 + j * 30, w - 44, t(k), v));
+    // condition + repair (blinks below 60 %)
     const mh = st.hp, f = clamp(c.hp / mh, 0, 1);
-    this.add.text(x + 24, y + 362, `${t('condition')}: ${Math.round(f * 100)}%`, { fontFamily: FONT, fontSize: '18px', color: f > 0.5 ? '#7dff6a' : f > 0.25 ? '#ffb020' : '#ff4a3a', resolution: 2 }).setOrigin(0, 0.5);
+    const ct = this.add.text(x + 22, y + 328, `${t('condition')}: ${Math.round(f * 100)}%`, { fontFamily: FONT, fontSize: '24px', color: f > 0.6 ? '#7dff6a' : f > 0.3 ? '#ffb020' : '#ff4a3a', stroke: '#000', strokeThickness: 3, resolution: 2 }).setOrigin(0, 0.5);
     const g = this.add.graphics();
-    g.fillStyle(0x000000, 0.6).fillRoundedRect(x + 24, y + 378, w - 48, 16, 6);
-    g.fillStyle(f > 0.5 ? 0x4ad04a : f > 0.25 ? 0xffb020 : 0xff3a2a, 1).fillRoundedRect(x + 26, y + 380, Math.max(3, (w - 52) * f), 12, 5);
+    g.fillStyle(0x000000, 0.6).fillRect(x + 22, y + 348, w - 44, 16);
+    g.fillStyle(f > 0.6 ? 0x4ad04a : f > 0.3 ? 0xffb020 : 0xff3a2a, 1).fillRect(x + 24, y + 350, Math.max(3, (w - 48) * f), 12);
     const cost = Math.ceil((mh - c.hp) * REPAIR_PER_HP);
     const damaged = c.hp < mh - 0.5;
-    makeButton(this, x + 105, y + 432, 170, 50, damaged ? t('repair', money(cost)) : t('repaired'), () => {
+    const rb = makeButton(this, x + 110, y + 392, 196, 54, damaged ? t('repair', money(cost)) : t('repaired'), () => {
       if (c.money < cost) { toast(this, t('noMoney')); Sound.play('deny'); return; }
       c.money -= cost; c.hp = mh; Sound.play('buy'); Save.store(c); this.rebuild();
-    }, { color: 0x3f6a7a, size: 16, disabled: !damaged });
-    makeButton(this, x + 292, y + 432, 170, 50, t('repairAd'), async () => {
+    }, { color: 0x3f6a7a, size: 20, disabled: !damaged });
+    const fb = makeButton(this, x + 318, y + 392, 196, 54, t('repairAd'), async () => {
       const ok = await Poki.rewardedBreak();
       if (ok) { c.hp = mh; Sound.play('buy'); Save.store(c); this.rebuild(); }
-    }, { color: 0x7a3f8a, size: 16, disabled: !(damaged && c.hp < mh * 0.8) });
+    }, { color: 0x7a3f8a, size: 20, disabled: !(damaged && c.hp < mh * 0.8) });
+    if (damaged && f < 0.6) {
+      const glow = this.add.rectangle(x + 110, y + 394, 214, 70, 0xff3a2a, 0.5).setBlendMode(Phaser.BlendModes.ADD).setDepth(-0.5);
+      this.tweens.add({ targets: glow, alpha: 0, yoyo: true, repeat: -1, duration: 420 });
+      this.tweens.add({ targets: [rb, fb], scale: 1.07, yoyo: true, repeat: -1, duration: 420, ease: 'Sine.InOut' });
+      this.tweens.add({ targets: ct, alpha: 0.35, yoyo: true, repeat: -1, duration: 420 });
+    }
   }
 
   buildShop(c) {
-    const x = 440, y = 80, w = 400, h = 470;
-    panel(this, x, y, w, h, t('upgrades'));
+    const x = 458, y = 98, w = 808, h = 420;
+    panel(this, x, y, w, h, t('upgrades'), { noStripes: true });
+    makeButton(this, x + w - 160, y + 26, 290, 40, '🚗  ' + t('dealer'), () => this.showDealer(), { color: 0xc0601a, size: 20 });
     const rows = [];
     UPGRADES.forEach(k => {
       const lvl = c.up[k];
       rows.push({ name: t(k), desc: STR.upDesc[k], lvl, max: UP_MAX, cost: lvl < UP_MAX ? upCost(c.car, k, lvl) : 0, buy: () => { c.up[k]++; if (k === 'plating') c.hp += carStats(c.car, c.up, c.mg).hp - carStats(c.car, { ...c.up, plating: c.up.plating - 1 }, c.mg).hp; } });
     });
     rows.push({ name: t('mg'), desc: STR.upDesc.mg, lvl: c.mg, max: UP_MAX, cost: c.mg < UP_MAX ? MG_COST[c.mg] : 0, buy: () => { c.mg++; } });
-    rows.push({ name: t('flame'), desc: STR.upDesc.flame, count: c.flame ? t('owned') : '', full: !!c.flame, cost: FLAME_COST, buy: () => { c.flame = true; } });
+    rows.push({ name: t('flame'), desc: STR.upDesc.flame, count: c.flame ? t('ownedW') : '', full: !!c.flame, cost: FLAME_COST, buy: () => { c.flame = true; } });
     if (!c.bazooka) rows.push({ name: t('bazooka'), desc: STR.upDesc.bazooka, count: '', full: false, cost: BAZOOKA_COST, buy: () => { c.bazooka = true; c.rockets = Math.max(c.rockets || 0, 2); } });
-    else rows.push({ name: t('rockets'), desc: STR.upDesc.rockets, count: `${c.rockets || 0}/${ROCKET_MAX}`, full: (c.rockets || 0) >= ROCKET_MAX, cost: ROCKET_PACK, buy: () => { c.rockets = Math.min(ROCKET_MAX, (c.rockets || 0) + 2); } });
-    rows.push({ name: t('mines'), desc: STR.upDesc.mines, count: `${c.mines}/${MINE_MAX}`, full: c.mines >= MINE_MAX, cost: MINE_PACK, buy: () => { c.mines = Math.min(MINE_MAX, c.mines + 3); } });
-    rows.push({ name: t('nitro'), desc: STR.upDesc.nitro, count: `${c.nitro}/${NITRO_MAX}`, full: c.nitro >= NITRO_MAX, cost: NITRO_COST, buy: () => { c.nitro = Math.min(NITRO_MAX, c.nitro + 1); } });
+    else rows.push({ name: t('rockets'), desc: STR.upDesc.rockets, count: `${c.rockets || 0} / ${ROCKET_MAX}`, full: (c.rockets || 0) >= ROCKET_MAX, cost: ROCKET_PACK, buy: () => { c.rockets = Math.min(ROCKET_MAX, (c.rockets || 0) + 2); } });
+    rows.push({ name: t('mines'), desc: STR.upDesc.mines, count: `${c.mines} / ${MINE_MAX}`, full: c.mines >= MINE_MAX, cost: MINE_PACK, buy: () => { c.mines = Math.min(MINE_MAX, c.mines + 3); } });
+    rows.push({ name: t('nitro'), desc: STR.upDesc.nitro, count: `${c.nitro} / ${NITRO_MAX}`, full: c.nitro >= NITRO_MAX, cost: NITRO_COST, buy: () => { c.nitro = Math.min(NITRO_MAX, c.nitro + 1); } });
+    const colW = (w - 30) / 2, g = this.add.graphics();
     rows.forEach((r, i) => {
-      const ry = y + 66 + i * 45;
-      const g = this.add.graphics();
-      g.fillStyle(0xffffff, i % 2 ? 0.02 : 0.05).fillRoundedRect(x + 10, ry - 21, w - 20, 42, 7);
-      this.add.text(x + 20, ry - 8, r.name, { fontFamily: FONT, fontSize: '15px', color: '#ffffff', resolution: 2 }).setOrigin(0, 0.5);
-      this.add.text(x + 20, ry + 10, r.desc, { fontFamily: FONT_B, fontSize: '12px', color: '#9a9aa8', resolution: 2 }).setOrigin(0, 0.5);
+      const cx = x + 10 + (i % 2) * (colW + 10), cy = y + 100 + Math.floor(i / 2) * 84;
+      g.fillStyle(0xffffff, (Math.floor(i / 2) + i) % 2 ? 0.03 : 0.07).fillRect(cx, cy - 38, colW, 76);
+      this.add.text(cx + 14, cy - 22, r.name, { fontFamily: FONT, fontSize: '22px', color: '#ffffff', stroke: '#000', strokeThickness: 3, resolution: 2 }).setOrigin(0, 0.5);
+      this.add.text(cx + 14, cy + 2, r.desc, { fontFamily: FONT_B, fontSize: '15px', fontStyle: 'bold', color: '#a8a098', resolution: 2 }).setOrigin(0, 0.5);
       if (r.max) {
-        for (let k = 0; k < r.max; k++) g.fillStyle(k < r.lvl ? 0xffb52a : 0x40434e, 1).fillRect(x + 168 + k * 10, ry - 14, 8, 10);
-        this.add.text(x + 168, ry + 9, `${r.lvl}/${r.max}`, { fontFamily: FONT_B, fontSize: '11px', fontStyle: 'bold', color: '#c8a060', resolution: 2 }).setOrigin(0, 0.5);
-      } else if (r.count) this.add.text(x + 196, ry - 8, r.count, { fontFamily: FONT, fontSize: '15px', color: '#ffb52a', resolution: 2 }).setOrigin(0, 0.5);
+        for (let k = 0; k < r.max; k++) g.fillStyle(k < r.lvl ? 0xffb52a : 0x4a443e, 1).fillRect(cx + 14 + k * 15, cy + 17, 12, 12);
+        this.add.text(cx + 172, cy + 23, `${r.lvl}/${r.max}`, { fontFamily: FONT, fontSize: '16px', color: '#ffb52a', resolution: 2 }).setOrigin(0, 0.5);
+      } else if (r.count) this.add.text(cx + 14, cy + 24, r.count, { fontFamily: FONT, fontSize: '20px', color: '#ffb52a', resolution: 2 }).setOrigin(0, 0.5);
       const maxed = r.max ? r.lvl >= r.max : r.full;
-      makeButton(this, x + w - 68, ry, 108, 34, maxed ? (r.max ? t('max') : t('owned')) : money(r.cost), () => {
+      makeButton(this, cx + colW - 84, cy, 152, 58, maxed ? (r.max ? t('max') : t('ownedW')) : money(r.cost), () => {
         if (c.money < r.cost) { toast(this, t('noMoney')); Sound.play('deny'); return; }
         c.money -= r.cost; r.buy(); Sound.play('buy'); Save.store(c); this.rebuild();
-      }, { color: c.money >= r.cost ? 0x5f8a2a : 0x6b3030, size: 15, disabled: maxed });
-    });
-    makeButton(this, x + w / 2, y + h - 30, w - 60, 42, '🚗  ' + t('dealer'), () => this.showDealer(), { color: 0xc0601a, size: 22 });
-  }
-
-  buildRanking(c) {
-    const x = 860, y = 80, w = 400, h = 470;
-    panel(this, x, y, w, h, t('ranking'));
-    const rows = standings(c);
-    rows.forEach((r, i) => {
-      const ry = y + 62 + i * 37;
-      const g = this.add.graphics();
-      g.fillStyle(r.player ? 0xffb52a : r.boss ? 0x8a1010 : 0xffffff, r.player ? 0.22 : r.boss ? 0.3 : i % 2 ? 0.02 : 0.05).fillRoundedRect(x + 10, ry - 16, w - 20, 33, 7);
-      g.fillStyle(r.color, 1).fillRoundedRect(x + 50, ry - 8, 14, 16, 3);
-      g.lineStyle(1, 0x000000, 0.6).strokeRoundedRect(x + 50, ry - 8, 14, 16, 3);
-      this.add.text(x + 22, ry, `${i + 1}.`, { fontFamily: FONT, fontSize: '16px', color: '#9a9aa8', resolution: 2 }).setOrigin(0, 0.5);
-      this.add.text(x + 76, ry, r.name + (r.boss ? ' ☠' : ''), { fontFamily: FONT_B, fontSize: '17px', fontStyle: 'bold', color: r.player ? '#ffe14a' : r.boss ? '#ff6a5a' : '#ffffff', resolution: 2 }).setOrigin(0, 0.5);
-      this.add.text(x + w - 24, ry, String(r.points), { fontFamily: FONT, fontSize: '17px', color: '#ffffff', resolution: 2 }).setOrigin(1, 0.5);
+      }, { color: c.money >= r.cost ? 0x5f8a2a : 0x6b3030, size: 22, disabled: maxed });
     });
   }
 
   buildRaces(c) {
-    const offers = c.offers, n = offers.length, gap = 14, x0 = 20, y = 566, h = 140;
-    const w = (UW - 40 - gap * (n - 1)) / n;
+    const offers = c.offers, n = offers.length, gap = 12, x0 = 14, y = 538, h = 172;
+    const w = Math.floor((UW - 28 - gap * (n - 1)) / n);
     const diffCol = [0x2e9e4a, 0xd89a1a, 0xc8322a, 0x9a3aa8, 0x2a6ab8, 0x3a3a3a, 0x7a1010];
     offers.forEach((o, i) => {
       const x = x0 + i * (w + gap), boss = o.diff === FINAL;
-      const g = this.add.graphics();
-      drawSpikes(g, x + 24, y, w - 48, Math.round(w / 40), 9, -1);
-      g.fillStyle(0x000000, 0.35).fillRoundedRect(x + 3, y + 5, w, h, 14);
-      g.fillStyle(boss ? 0x2a0c0c : 0x1b1d24, 0.95).fillRoundedRect(x, y, w, h, 14);
-      g.lineStyle(3, diffCol[o.diff], 1).strokeRoundedRect(x, y, w, h, 14);
-      g.fillStyle(diffCol[o.diff], 1).fillRoundedRect(x, y, w, 30, { tl: 14, tr: 14, bl: 0, br: 0 });
-      this.add.text(x + 14, y + 15, boss ? t('bossCard').toUpperCase() : STR.diff[o.diff], { fontFamily: FONT, fontSize: '17px', color: '#ffffff', resolution: 2 }).setOrigin(0, 0.5);
-      this.add.text(x + w - 14, y + 15, lapsText(o.laps), { fontFamily: FONT, fontSize: '15px', color: '#ffffff', resolution: 2 }).setOrigin(1, 0.5);
-      this.add.text(x + 14, y + 48, TRACKS[o.track].name, { fontFamily: FONT, fontSize: '19px', color: '#ffb52a', resolution: 2 }).setOrigin(0, 0.5);
-      this.add.text(x + 14, y + 74, t('prize', money(PRIZES[o.diff][0])) + (POINTS[o.diff][0] ? `  ·  +${POINTS[o.diff][0]} ${t('points').toLowerCase()}` : ''), { fontFamily: FONT_B, fontSize: '15px', fontStyle: 'bold', color: '#7dff6a', resolution: 2 }).setOrigin(0, 0.5);
+      this.add.image(x, y - 12, raceCardTexture(this, w, h, diffCol[o.diff], boss)).setOrigin(0, 0);
+      this.add.text(x + 16, y + 22, boss ? t('bossCard').toUpperCase() : STR.diff[o.diff], { fontFamily: FONT, fontSize: '25px', color: '#ffffff', stroke: '#000', strokeThickness: 3, resolution: 2 }).setOrigin(0, 0.5);
+      this.add.text(x + w - 16, y + 22, lapsText(o.laps), { fontFamily: FONT, fontSize: '21px', color: '#ffffff', stroke: '#000', strokeThickness: 3, resolution: 2 }).setOrigin(1, 0.5);
+      this.add.text(x + 16, y + 66, TRACKS[o.track].name, { fontFamily: FONT, fontSize: n > 3 ? '22px' : '27px', color: '#ffb52a', stroke: '#000', strokeThickness: 3, resolution: 2 }).setOrigin(0, 0.5);
+      this.add.text(x + 16, y + 100, money(PRIZES[o.diff][0]) + (POINTS[o.diff][0] ? `  ·  +${POINTS[o.diff][0]} pts` : ''), { fontFamily: FONT, fontSize: '21px', color: '#7dff6a', stroke: '#000', strokeThickness: 3, resolution: 2 }).setOrigin(0, 0.5);
       const names = o.opp.map(id => driverDef(id).name).join(', ');
-      this.add.text(x + 14, y + 98, t('opponents') + ' ' + names, { fontFamily: FONT_B, fontSize: '13px', color: '#b0b0bc', resolution: 2, wordWrap: { width: w - 150 } }).setOrigin(0, 0.5);
-      makeButton(this, x + w - 70, y + h - 30, 116, 44, t('race'), () => this.startRace(o), { color: diffCol[o.diff], size: 19 });
+      this.add.text(x + 16, y + 140, names, { fontFamily: FONT_B, fontSize: '16px', fontStyle: 'bold', color: '#c0b8b0', resolution: 2, wordWrap: { width: w - 220 } }).setOrigin(0, 0.5);
+      makeButton(this, x + w - 104, y + h - 40, 180, 64, t('race'), () => this.startRace(o), { color: diffCol[o.diff], size: 28 });
     });
-    const next = TIER_UNLOCK.findIndex((p, ti) => ti > 0 && c.points < p);
-    if (next > 0) this.add.text(UW / 2, 557, t('tierLocked', STR.diff[next], TIER_UNLOCK[next]), { fontFamily: FONT_B, fontSize: '13px', fontStyle: 'bold', color: '#ffd36a', stroke: '#000', strokeThickness: 3, resolution: 2 }).setOrigin(0.5).setDepth(5);
-    if (!offers.some(o => o.diff === FINAL) && !c.champion) {
-      this.add.text(1060, 538, t('bossLocked', BOSS_POINTS), { fontFamily: FONT_B, fontSize: '13px', fontStyle: 'bold', color: '#ff8a6a', stroke: '#000', strokeThickness: 3, resolution: 2 }).setOrigin(0.5);
-    }
+  }
+
+  showStandings() {
+    const c = G.career;
+    const layer = this.add.container(0, 0).setDepth(800);
+    layer.add(this.add.rectangle(UW / 2, GH / 2, GW, GH, 0x000000, 0.8).setInteractive());
+    layer.add(rustPlate(this, UW / 2 - 440, 28, 880, 664, { title: true, spikes: true, dim: 0.5 }).img);
+    layer.add(this.add.text(UW / 2 - 410, 53, t('ranking'), { fontFamily: FONT, fontSize: '30px', color: '#ffb52a', stroke: '#000', strokeThickness: 4, resolution: 2 }).setOrigin(0, 0.5));
+    const g = this.add.graphics(); layer.add(g);
+    standings(c).forEach((r, i) => {
+      const ry = 112 + i * 44, x = UW / 2 - 420, w = 840;
+      g.fillStyle(r.player ? 0xffb52a : r.boss ? 0x8a1010 : 0xffffff, r.player ? 0.25 : r.boss ? 0.35 : i % 2 ? 0.03 : 0.07).fillRect(x, ry - 20, w, 40);
+      g.fillStyle(r.color, 1).fillRect(x + 70, ry - 11, 20, 22);
+      layer.add(this.add.text(x + 16, ry, `${i + 1}.`, { fontFamily: FONT, fontSize: '24px', color: '#b0a898', resolution: 2 }).setOrigin(0, 0.5));
+      layer.add(this.add.text(x + 106, ry, r.name + (r.boss ? '  ☠' : ''), { fontFamily: FONT, fontSize: '25px', color: r.player ? '#ffe14a' : r.boss ? '#ff6a5a' : '#ffffff', stroke: '#000', strokeThickness: 3, resolution: 2 }).setOrigin(0, 0.5));
+      layer.add(this.add.text(x + w - 20, ry, String(r.points), { fontFamily: FONT, fontSize: '25px', color: '#ffffff', stroke: '#000', strokeThickness: 3, resolution: 2 }).setOrigin(1, 0.5));
+    });
+    if (!c.champion) layer.add(this.add.text(UW / 2, 610, t('bossLocked', BOSS_POINTS), { fontFamily: FONT_B, fontSize: '20px', fontStyle: 'bold', color: '#ff8a6a', stroke: '#000', strokeThickness: 3, resolution: 2 }).setOrigin(0.5));
+    layer.add(makeButton(this, UW / 2, 652, 260, 64, t('back'), () => layer.destroy(), { color: 0x4a3f36, size: 26 }));
   }
 
   async startRace(offer) {
@@ -289,51 +296,49 @@ class GarageScene extends Phaser.Scene {
     const c = G.career;
     const layer = this.add.container(0, 0).setDepth(800);
     layer.add(this.add.rectangle(UW / 2, GH / 2, GW, GH, 0x000000, 0.7).setInteractive());
-    const rp = rustPlate(this, UW / 2 - 330, GH / 2 - 170, 660, 340, { spikes: true, spikesBottom: true, dim: 0.5 });
-    layer.add([rp.g, rp.ts, rp.g2]);
-    layer.add(this.add.text(UW / 2, GH / 2 - 125, 'WELCOME TO HAVOC RALLY', { fontFamily: FONT, fontSize: '28px', color: '#ffb52a', resolution: 2 }).setOrigin(0.5));
-    layer.add(this.add.text(UW / 2, GH / 2 - 30, t('tip'), { fontFamily: FONT_B, fontSize: '20px', fontStyle: 'bold', color: '#ffffff', align: 'center', resolution: 2, wordWrap: { width: 580 } }).setOrigin(0.5));
-    layer.add(this.add.text(UW / 2, GH / 2 + 38, t('controls').replace(/ {3}· {3}/g, '  ·  '), { fontFamily: FONT_B, fontSize: '14px', fontStyle: 'bold', color: '#ffb52a', align: 'center', resolution: 2, wordWrap: { width: 600 } }).setOrigin(0.5));
-    layer.add(this.add.text(UW / 2, GH / 2 + 76, t('controlsTouch'), { fontFamily: FONT_B, fontSize: '15px', color: '#b0b0bc', align: 'center', resolution: 2 }).setOrigin(0.5));
-    layer.add(makeButton(this, UW / 2, GH / 2 + 120, 220, 56, 'OK', () => { c.tipSeen = true; Save.store(c); layer.destroy(); }, { color: 0x5f8a2a }));
+    layer.add(rustPlate(this, UW / 2 - 400, GH / 2 - 250, 800, 500, { spikes: true, spikesBottom: true, dim: 0.5 }).img);
+    layer.add(this.add.text(UW / 2, GH / 2 - 200, 'WELCOME TO HAVOC RALLY', { fontFamily: FONT, fontSize: '34px', color: '#ffb52a', stroke: '#000', strokeThickness: 4, resolution: 2 }).setOrigin(0.5));
+    layer.add(this.add.text(UW / 2, GH / 2 - 80, t('tip'), { fontFamily: FONT_B, fontSize: '26px', fontStyle: 'bold', color: '#ffffff', align: 'center', resolution: 2, wordWrap: { width: 720 } }).setOrigin(0.5));
+    layer.add(this.add.text(UW / 2, GH / 2 + 50, t('controls').replace(/ {3}· {3}/g, '  ·  '), { fontFamily: FONT_B, fontSize: '19px', fontStyle: 'bold', color: '#ffb52a', align: 'center', resolution: 2, wordWrap: { width: 720 } }).setOrigin(0.5));
+    layer.add(this.add.text(UW / 2, GH / 2 + 110, t('controlsTouch'), { fontFamily: FONT_B, fontSize: '20px', fontStyle: 'bold', color: '#c0b8b0', align: 'center', resolution: 2 }).setOrigin(0.5));
+    layer.add(makeButton(this, UW / 2, GH / 2 + 180, 260, 68, 'OK', () => { c.tipSeen = true; Save.store(c); layer.destroy(); }, { color: 0x5f8a2a, size: 30 }));
   }
 
   showDealer() {
     const c = G.career;
     const layer = this.add.container(0, 0).setDepth(800);
     layer.add(this.add.rectangle(UW / 2, GH / 2, GW, GH, 0x000000, 0.8).setInteractive());
-    layer.add(this.add.text(UW / 2, 60, t('dealer'), { fontFamily: FONT, fontSize: '40px', color: '#ffb52a', resolution: 2 }).setOrigin(0.5));
+    layer.add(this.add.text(UW / 2, 52, t('dealer'), { fontFamily: FONT, fontSize: '44px', color: '#ffb52a', stroke: '#000', strokeThickness: 5, resolution: 2 }).setOrigin(0.5));
     const trade = Math.round(CARS[c.car].price * 0.5);
-    layer.add(this.add.text(UW / 2, 104, t('tradeIn', money(trade)) + '   ·   ' + money(c.money), { fontFamily: FONT_B, fontSize: '18px', fontStyle: 'bold', color: '#7dff6a', resolution: 2 }).setOrigin(0.5));
+    layer.add(this.add.text(UW / 2, 100, t('tradeIn', money(trade)) + '   ·   ' + money(c.money), { fontFamily: FONT_B, fontSize: '24px', fontStyle: 'bold', color: '#7dff6a', stroke: '#000', strokeThickness: 3, resolution: 2 }).setOrigin(0.5));
     const w = 290, gap = 16, x0 = (UW - (w * 4 + gap * 3)) / 2;
     CARS.forEach((car, i) => {
       const x = x0 + i * (w + gap), y = 140, h = 470;
-      const rp = rustPlate(this, x, y, w, h, { spikes: true, dim: 0.5 });
-      layer.add([rp.g, rp.ts, rp.g2]);
+      layer.add(rustPlate(this, x, y, w, h, { spikes: true, dim: 0.5 }).img);
       const g = this.add.graphics();
       if (i === c.car) g.lineStyle(3, 0xffb52a, 1).strokeRect(x, y, w, h);
       layer.add(g);
-      layer.add(this.add.text(x + w / 2, y + 30, car.name.toUpperCase(), { fontFamily: FONT, fontSize: '26px', color: '#ffffff', resolution: 2 }).setOrigin(0.5));
+      layer.add(this.add.text(x + w / 2, y + 32, car.name.toUpperCase(), { fontFamily: FONT, fontSize: '30px', color: '#ffffff', stroke: '#000', strokeThickness: 4, resolution: 2 }).setOrigin(0.5));
       layer.add(addCarImage(this, x + w / 2, y + 140, car.shape, PLAYER_COLOR, 1.45, 0.5));
       const st = carStats(i, { engine: 0, tires: 0, plating: 0 }, 0), fr = statFracs(st);
       [['speed', fr.speed], ['accel', fr.accel], ['handling', fr.handling], ['armor', fr.hp]].forEach(([k, v], j) => {
         const by = y + 190 + j * 30;
-        layer.add(this.add.text(x + 16, by, t(k), { fontFamily: FONT_B, fontSize: '14px', fontStyle: 'bold', color: '#c8c8d0', resolution: 2 }).setOrigin(0, 0.5));
+        layer.add(this.add.text(x + 14, by, t(k), { fontFamily: FONT_B, fontSize: '18px', fontStyle: 'bold', color: '#d0c8c0', resolution: 2 }).setOrigin(0, 0.5));
         const bg2 = this.add.graphics();
-        bg2.fillStyle(0x000000, 0.6).fillRoundedRect(x + 120, by - 6, w - 140, 12, 4);
-        bg2.fillStyle(0xffb52a, 1).fillRoundedRect(x + 121, by - 5, (w - 142) * clamp(v, 0, 1), 10, 3);
+        bg2.fillStyle(0x000000, 0.6).fillRect(x + 140, by - 7, w - 156, 14);
+        bg2.fillStyle(0xffb52a, 1).fillRect(x + 142, by - 5, (w - 160) * clamp(v, 0, 1), 10);
         layer.add(bg2);
       });
-      layer.add(this.add.text(x + w / 2, y + 330, STR.carDesc[i], { fontFamily: FONT_B, fontSize: '15px', color: '#b0b0bc', align: 'center', resolution: 2, wordWrap: { width: w - 30 } }).setOrigin(0.5));
+      layer.add(this.add.text(x + w / 2, y + 336, STR.carDesc[i], { fontFamily: FONT_B, fontSize: '19px', fontStyle: 'bold', color: '#c0b8b0', align: 'center', resolution: 2, wordWrap: { width: w - 26 } }).setOrigin(0.5));
       const own = i === c.car, net = car.price - trade;
-      const btn = makeButton(this, x + w / 2, y + h - 50, w - 40, 56, own ? t('owned') : t('buyFor', money(Math.max(0, net))), () => {
+      const btn = makeButton(this, x + w / 2, y + h - 50, w - 40, 66, own ? t('owned') : t('buyFor', money(Math.max(0, net))), () => {
         if (c.money < net) { toast(this, t('noMoney')); Sound.play('deny'); return; }
         c.money -= Math.max(0, net); c.car = i; c.up = { engine: 0, tires: 0, plating: 0 }; c.hp = maxHp(c);
         Sound.play('buy'); Save.store(c); layer.destroy(); this.rebuild(); toast(this, t('bought'), '#7dff6a');
-      }, { color: own ? 0x555555 : c.money >= net ? 0x5f8a2a : 0x6b3030, size: 18, disabled: own || i < c.car });
+      }, { color: own ? 0x555555 : c.money >= net ? 0x5f8a2a : 0x6b3030, size: 23, disabled: own || i < c.car });
       layer.add(btn);
     });
-    layer.add(makeButton(this, UW / 2, GH - 50, 260, 54, t('close'), () => layer.destroy(), { color: 0x4a3f36 }));
+    layer.add(makeButton(this, UW / 2, GH - 48, 280, 64, t('close'), () => layer.destroy(), { color: 0x4a3f36, size: 26 }));
   }
 }
 
@@ -392,11 +397,11 @@ class ResultsScene extends Phaser.Scene {
     const sy = y0 + 90 + res.rows.length * 52;
     const lines = [[t('prizeMoney'), pr.prize], [t('bounty'), res.bounty], [t('pickups'), res.cash]];
     lines.forEach(([s, v], i) => {
-      this.add.text(x + 30, sy + i * 28, s, { fontFamily: FONT_B, fontSize: '18px', fontStyle: 'bold', color: '#c8c8d0', resolution: 2 }).setOrigin(0, 0.5);
-      this.add.text(x + 380, sy + i * 28, money(v), { fontFamily: FONT, fontSize: '18px', color: '#7dff6a', resolution: 2 }).setOrigin(1, 0.5);
+      this.add.text(x + 30, sy + i * 30, s, { fontFamily: FONT_B, fontSize: '22px', fontStyle: 'bold', color: '#d0c8c0', resolution: 2 }).setOrigin(0, 0.5);
+      this.add.text(x + 430, sy + i * 30, money(v), { fontFamily: FONT, fontSize: '22px', color: '#7dff6a', resolution: 2 }).setOrigin(1, 0.5);
     });
     const total = pr.prize + res.bounty + res.cash;
-    this.totalT = this.add.text(x + 30, sy + 92, `${t('total')}: ${money(total)}`, { fontFamily: FONT, fontSize: '28px', color: '#7dff6a', stroke: '#000', strokeThickness: 4, resolution: 2 }).setOrigin(0, 0.5);
+    this.totalT = this.add.text(x + 30, sy + 98, `${t('total')}: ${money(total)}`, { fontFamily: FONT, fontSize: '32px', color: '#7dff6a', stroke: '#000', strokeThickness: 4, resolution: 2 }).setOrigin(0, 0.5);
     if (res.unlocked) {
       const ut = this.add.text(UW / 2, sy + 128, `NEW RACES UNLOCKED: ${res.unlocked}!`, { fontFamily: FONT, fontSize: '26px', color: '#ffd36a', stroke: '#000', strokeThickness: 5, resolution: 2 }).setOrigin(0.5);
       this.tweens.add({ targets: ut, scale: 1.08, yoyo: true, repeat: -1, duration: 450 });
